@@ -79,7 +79,7 @@ docker compose up --build
 | Driver | driver@routenex.in | Demo@123 |
 | Dispatcher | dispatcher@routenex.in | Demo@123 |
 | Fleet manager | fleet@routenex.in | Demo@123 |
-| Admin | admin@routenex.in | Demo@123 |
+| Admin | samikhan@routenex.in | Demo@123 |
 
 Mobile demo: **+91 8882846897**, OTP **123456**. This code applies only to the explicitly documented test number. Real OTP credentials are not hard-coded. Set up a provider adapter and secrets in environment variables before production.
 
