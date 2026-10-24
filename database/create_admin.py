@@ -48,6 +48,6 @@ with tx() as c:
         uid = c.execute("INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?, 'admin')", (a.name, email, hash_password(pw))).lastrowid
         verb = "created"
     if a.retire_demo_admin:
-        c.execute("UPDATE users SET active=0 WHERE email='admin@routenex.in'")
+        c.execute("UPDATE users SET active=0 WHERE email='samikhan@routenex.in'")
     c.execute("INSERT INTO audit_logs(user_id,action,entity,entity_id,details) VALUES(?,?,?,?,?)", (uid, "CREATE_ADMIN", "user", str(uid), "admin account " + verb))
 print(f"\nAdmin {verb}: {a.name} <{email}>" + ("  | demo admin deactivated" if a.retire_demo_admin else "") + "\nYou can now log in with this email and the password you just chose.")
