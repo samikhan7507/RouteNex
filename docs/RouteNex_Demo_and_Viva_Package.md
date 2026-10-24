@@ -105,7 +105,7 @@ I will be clear about what is real and what is simulated, and I fixed several se
 
 | Role | Login | Password |
 |---|---|---|
-| Admin (you) | samikhan75706@gmail.com | the password you set with create_admin (the old admin@routenex.in is switched off) |
+| Admin (you) | samikhan@gmail.com | the password you set with create_admin (the old samikhan@routenex.in is switched off) |
 | Customer | customer@routenex.in | Demo@123 |
 | Delivery driver (bike RJ14-RN-101) | driver@routenex.in | Demo@123 |
 | Dispatcher / Fleet manager | dispatcher@routenex.in / fleet@routenex.in | Demo@123 |
