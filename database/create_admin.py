@@ -9,7 +9,7 @@ from db import init_db, tx
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--name", required=True); ap.add_argument("--email", required=True)
-ap.add_argument("--retire-demo-admin", action="store_true", help="deactivate the public demo login admin@routenex.in")
+ap.add_argument("--retire-demo-admin", action="store_true", help="deactivate the public demo login samikhan@routenex.in")
 ap.add_argument("--show", action="store_true", help="show the password while typing")
 a = ap.parse_args()
 
