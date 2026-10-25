@@ -84,7 +84,11 @@ def migrate(c):
         if col not in have:
             c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
     c.execute("CREATE INDEX IF NOT EXISTS idx_rides_kind ON rides(kind, status)")
-    for name, w in ITEM_WEIGHTS.items():                 # real weights drive vehicle capacity in the optimizer
+    try:
+        from services.catalog import WEIGHTS as CATALOG_WEIGHTS
+    except ImportError:
+        CATALOG_WEIGHTS = {}
+    for name, w in {**ITEM_WEIGHTS, **CATALOG_WEIGHTS}.items():   # real weights drive vehicle capacity in the optimizer
         c.execute("UPDATE items SET weight_kg=? WHERE name=? AND weight_kg IS NULL", (w, name))
     c.execute("""UPDATE orders SET weight_kg=(SELECT SUM(oi.quantity*COALESCE(i.weight_kg,2)) FROM order_items oi JOIN items i ON i.id=oi.item_id
                  WHERE oi.order_id=orders.id) WHERE weight_kg IS NULL""")

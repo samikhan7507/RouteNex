@@ -187,8 +187,9 @@ def cancel_trip(c, r, by, reason):
     prepaid = r["paid_amount"] or 0
     fee = CANCEL_FEE if (r["status"] == "arriving" and by == "customer" and prepaid > CANCEL_FEE) else 0.0
     refund = max(0.0, round(prepaid - fee, 2))
-    c.execute("UPDATE rides SET status='cancelled',cancel_reason=?,payment_status=? WHERE id=?",
-              (reason, "refunded" if prepaid > 0 else "cancelled", r["id"]))
+    if c.execute("UPDATE rides SET status='cancelled',cancel_reason=?,payment_status=? WHERE id=? AND status IN ('searching','matched','arriving')",
+                 (reason, "refunded" if prepaid > 0 else "cancelled", r["id"])).rowcount != 1:
+        raise ApiError(409, "This trip can no longer be cancelled")      # someone else cancelled/expired it first: never refund twice
     refund_to_wallet(c, r["user_id"], refund, "ride", r["id"], f"Refund for cancelled trip #{r['id']}")
     c.execute("DELETE FROM coupon_uses WHERE ref_type='ride' AND ref_id=?", (r["id"],))   # a cancelled booking gives the coupon back
     release_driver(c, r["driver_id"])
@@ -205,7 +206,9 @@ def _created_epoch(r):
 def expire_trip(c, r, reason):
     """Safety net for trips nobody finished (old test data, abandoned sessions): cancel, free the driver, refund what was prepaid."""
     prepaid = r["paid_amount"] or 0
-    c.execute("UPDATE rides SET status='cancelled',cancel_reason=?,payment_status=? WHERE id=?", (reason, "refunded" if prepaid > 0 else "cancelled", r["id"]))
+    if c.execute("UPDATE rides SET status='cancelled',cancel_reason=?,payment_status=? WHERE id=? AND status IN ('searching','matched','arriving','started')",
+                 (reason, "refunded" if prepaid > 0 else "cancelled", r["id"])).rowcount != 1:
+        return False
     refund_to_wallet(c, r["user_id"], prepaid, "ride", r["id"], f"Refund for expired trip #{r['id']}")
     c.execute("DELETE FROM coupon_uses WHERE ref_type='ride' AND ref_id=?", (r["id"],))
     release_driver(c, r["driver_id"])
@@ -244,7 +247,10 @@ def advance(c, rid):
             if try_match(c, rid):
                 continue
             if now - (r["search_started_at"] or now) > SEARCH_TIMEOUT_S:
-                cancel_trip(c, r, "system", "No driver available nearby")
+                try:
+                    cancel_trip(c, r, "system", "No driver available nearby")
+                except ApiError:
+                    pass                                                 # another request already did it
             break
         limit = STALE_AFTER_S.get(st)
         if limit:

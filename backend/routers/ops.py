@@ -192,7 +192,7 @@ def logs(u=Depends(roles("admin"))):
 
 @router.get("/admin/users")
 def users(u=Depends(roles("admin"))):
-    return rows("SELECT id,name,email,phone,role,active,created_at FROM users ORDER BY id")
+    return rows("SELECT id,name,email,phone,role,active,created_at FROM users ORDER BY CASE role WHEN 'admin' THEN 0 ELSE 1 END, active DESC, id")
 
 
 @router.patch("/admin/users/{uid}/active")

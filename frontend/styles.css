@@ -82,3 +82,15 @@ body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:contain}
 .ai-input{display:flex;gap:6px;padding:10px;border-top:1px solid var(--line);background:#fff;padding-bottom:calc(10px + env(safe-area-inset-bottom))}.ai-input input{flex:1;min-width:0}.ai-mic{background:#eef0ff;color:var(--brand);padding:8px 11px}.ai-mic.on{background:#e43d65;color:#fff}
 .dots i{display:inline-block;width:7px;height:7px;margin:0 2px;border-radius:50%;background:#aab;animation:bl 1s infinite}.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}@keyframes bl{0%,80%,100%{opacity:.2}40%{opacity:1}}
 @media(max-width:700px){.ai-fab{bottom:calc(78px + env(safe-area-inset-bottom));right:14px}.ai-panel{right:0;bottom:0;width:100vw;height:calc(100vh - 56px);border-radius:18px 18px 0 0}}
+
+/* ---- Phase 6: shop ---- */
+.shop-tools .toolbar{margin-bottom:12px;flex-wrap:wrap}.shop-tools .search{flex:1;max-width:460px}.shop-tools select{width:auto;min-width:190px}
+.filters button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.shopcard{padding-top:0}.shopcard h3{margin:0 0 6px;font-size:15.5px;line-height:1.3}.shopcard p{margin:0 0 4px;font-size:12.5px}
+.shop-banner{height:96px;margin:0 -20px 14px;padding:12px 16px;color:#fff;display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+.shop-banner small{font-size:11px;font-weight:700;letter-spacing:.3px;background:#ffffff2e;padding:3px 9px;border-radius:12px;backdrop-filter:blur(2px)}.shop-emoji{font-size:42px;line-height:1;filter:drop-shadow(0 4px 8px #0003)}
+.stock-low{color:#b25e00;font-weight:700}.stock-out{color:#c51f49;font-weight:700}
+.quantity button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.cartbar{position:sticky;bottom:14px;z-index:6;margin:18px auto 0;max-width:560px;display:flex;align-items:center;justify-content:space-between;gap:14px;background:#101426;color:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 14px 34px #10182855}
+.cartbar button{background:var(--cyan);color:#05241f;white-space:nowrap}
+@media(max-width:590px){.shop-banner{margin:0 -14px 12px}.shop-tools select{width:100%}.cartbar{bottom:78px}}
