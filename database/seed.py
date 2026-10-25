@@ -1,22 +1,26 @@
 """Deterministic, idempotent Jaipur operations dataset. Use --reset to rebuild all demo data."""
-import sqlite3, pathlib, sys, random, json, datetime
+import sqlite3, pathlib, sys, random, json, datetime, os, secrets
 sys.path.insert(0,str(pathlib.Path(__file__).parents[1]/'backend'))
 from security import hash_password
-root=pathlib.Path(__file__).parent; db=root/'routenex.db'; random.seed(42)
+from config import DB_PATH            # same database file the app uses (honours ROUTENEX_DB and backend/.env)
+root=pathlib.Path(__file__).parent; db=DB_PATH; random.seed(42)
+ADMIN_EMAIL=(os.getenv('ADMIN_EMAIL') or 'samikhan@routenex.in').strip().lower(); ADMIN_NAME=(os.getenv('ADMIN_NAME') or 'Sami Khan').strip()
 c=sqlite3.connect(db); c.execute('PRAGMA foreign_keys=ON'); c.executescript((root/'schema.sql').read_text())
 if '--reset' in sys.argv:
     c.execute('PRAGMA foreign_keys=OFF')
     for t in ['route_orders','order_items','maintenance','notifications','audit_logs','alerts','routes','rides','orders','addresses','drivers','vehicles','items','otp_codes','users']: c.execute(f'DELETE FROM {t}')
     c.execute('PRAGMA foreign_keys=ON')
 roles=[
-('Aarav Sharma','customer@routenex.in','8882846897','customer'),('Diya Rathore','driver@routenex.in','9000000002','driver'),('Kabir Mehta','dispatcher@routenex.in','9000000003','dispatcher'),('Meera Joshi','fleet@routenex.in','9000000004','fleet_manager'),('Sami Khan','samikhan@routenex.in','9000000005','admin'),
+('Aarav Sharma','customer@routenex.in','8882846897','customer'),('Diya Rathore','driver@routenex.in','9000000002','driver'),('Kabir Mehta','dispatcher@routenex.in','9000000003','dispatcher'),('Meera Joshi','fleet@routenex.in','9000000004','fleet_manager'),(ADMIN_NAME,ADMIN_EMAIL,'9000000005','admin'),
 ('Rohan Gupta','rohan@routenex.in','9000000011','customer'),('Ishita Jain','ishita@routenex.in','9000000012','customer'),('Vivaan Saini','vivaan@routenex.in','9000000013','customer'),('Saanvi Verma','saanvi@routenex.in','9000000014','customer'),('Arjun Yadav','arjun@routenex.in','9000000015','customer'),('Myra Khan','myra@routenex.in','9000000016','customer'),('Advait Pareek','advait@routenex.in','9000000017','customer'),('Kiara Bansal','kiara@routenex.in','9000000018','customer'),
 ('Mohit Gurjar','driver2@routenex.in','9000000022','driver'),('Neha Kumari','driver3@routenex.in','9000000023','driver'),('Farhan Ali','driver4@routenex.in','9000000024','driver'),('Pooja Choudhary','driver5@routenex.in','9000000025','driver'),('Rahul Solanki','driver6@routenex.in','9000000026','driver'),('Nitin Sharma','driver7@routenex.in','9000000027','driver'),('Salma Qureshi','driver8@routenex.in','9000000028','driver'),('Devendra Singh','driver9@routenex.in','9000000029','driver'),('Kavita Meena','driver10@routenex.in','9000000030','driver'),('Imran Sheikh','driver11@routenex.in','9000000031','driver'),('Sunita Yadav','driver12@routenex.in','9000000032','driver'),
 ('Lakshya Operations','dispatcher2@routenex.in','9000000041','dispatcher'),('Naina Fleet','fleet2@routenex.in','9000000042','fleet_manager')]
-for n,e,p,r in roles:c.execute('INSERT OR IGNORE INTO users(name,email,phone,password_hash,role) VALUES(?,?,?,?,?)',(n,e,p,hash_password('Demo@123'),r))
-items=[
-('Express Parcel','Door-to-door delivery up to 5 kg','Express',199,80,'📦'),('Same-Day Documents','Secure legal and business documents','Express',129,120,'📄'),('Grocery Essentials Box','Fresh Jaipur staples and produce','Commerce',749,35,'🥬'),('Pharmacy Express','Temperature-aware medicine delivery','Healthcare',249,50,'💊'),('Cold Chain Crate','2–8°C monitored shipping','Cold Chain',899,18,'❄️'),('Home Move Mini','Compact 1-room relocation','Moving',1499,15,'🏠'),('Home Move Plus','2-BHK managed relocation','Moving',3999,8,'🚚'),('Electronics Secure','Tamper-evident insured transport','Special Care',599,25,'💻'),('Fragile Art Pack','Museum-grade packing and handling','Special Care',1299,12,'🏺'),('Bulk Business Van','Dedicated van for 4 hours','Business',2499,10,'🚐'),('Two-Wheeler Tow','Local bike recovery service','Roadside',799,14,'🏍️'),('Airport Luggage','Hotel-to-airport luggage transfer','Travel',449,30,'🧳'),('Furniture Delivery','Large-item city transport','Moving',1099,16,'🛋️'),('Food Partner Sprint','Hot-food priority dispatch','Business',159,100,'🍱'),('Daily Delivery Pass','Ten local deliveries bundle','Subscription',1299,40,'🎫')]
-for x in items:c.execute('INSERT OR IGNORE INTO items(name,description,category,price,stock,icon) VALUES(?,?,?,?,?,?)',x)
+demo_hash=hash_password('Demo@123'); admin_hash=hash_password(os.getenv('ADMIN_PASSWORD') or secrets.token_urlsafe(18))   # the admin is never given the public demo password
+for n,e,p,r in roles:c.execute('INSERT OR IGNORE INTO users(name,email,phone,password_hash,role) VALUES(?,?,?,?,?)',(n,e,p,admin_hash if r=='admin' else demo_hash,r))
+from services.catalog import seed_rows      # the real-world student catalogue (backend/services/catalog.py)
+items=seed_rows()
+if c.execute('SELECT COUNT(*) FROM items').fetchone()[0]==0:
+    c.executemany('INSERT INTO items(name,description,category,price,stock,icon) VALUES(?,?,?,?,?,?)',items)
 locations=[('C-Scheme',26.9124,75.7873,'302001'),('Malviya Nagar',26.8540,75.8243,'302017'),('Vaishali Nagar',26.9126,75.7442,'302021'),('Mansarovar',26.8505,75.7628,'302020'),('Jagatpura',26.8399,75.8322,'302017'),('Raja Park',26.8942,75.8210,'302004'),('Bani Park',26.9322,75.7933,'302016'),('Tonk Road',26.8735,75.7950,'302018'),('Amer',26.9855,75.8513,'302028'),('Sitapura',26.7751,75.8514,'302022'),('Jhotwara',26.9540,75.7420,'302012'),('Civil Lines',26.9064,75.7790,'302006')]
 customers=c.execute("SELECT id FROM users WHERE role='customer' ORDER BY id").fetchall()
 for i,(uid,) in enumerate(customers):
@@ -36,9 +40,9 @@ if c.execute('SELECT COUNT(*) FROM orders').fetchone()[0]<30:
     statuses=['delivered']*20+['in_transit']*4+['placed']*10+['cancelled']*2+['pending']*2
     for i,status in enumerate(statuses):
         uid=customers[i%len(customers)][0]; aid=(i%len(customers))+1; loc=locations[i%len(locations)]; created=now-datetime.timedelta(days=(37-i)//3,hours=i%8)
-        total=round([199,749,899,1499,599,2499][i%6]*(1+(i%3)*.25),2); priority=1+(i%5)
+        item=(i*7)%len(items)+1; qty=1+i%3; total=round(items[item-1][3]*qty,2); priority=1+(i%5)
         oid=c.execute('INSERT INTO orders(user_id,address_id,status,priority,delivery_window,total,lat,lng,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',(uid,aid,status,priority,f'{9+i%9:02d}:00–{11+i%9:02d}:00',total,loc[1],loc[2],created.isoformat(' '),(created+datetime.timedelta(minutes=35+i%70)).isoformat(' '))).lastrowid;order_ids.append(oid)
-        item=(i%len(items))+1;c.execute('INSERT INTO order_items(order_id,item_id,quantity,unit_price) VALUES(?,?,?,?)',(oid,item,1+i%3,items[item-1][3]))
+        c.execute('INSERT INTO order_items(order_id,item_id,quantity,unit_price) VALUES(?,?,?,?)',(oid,item,qty,items[item-1][3]))
     # Historical routes attached to delivered/in-transit orders.
     for r in range(8):
         v=vehicle_rows[r][0]; did=c.execute('SELECT id FROM drivers WHERE vehicle_id=?',(v,)).fetchone()[0]; pts=[[locations[(r+j)%12][1],locations[(r+j)%12][2]] for j in range(4)]

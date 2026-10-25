@@ -5,10 +5,12 @@ const OPS = ['dispatcher', 'fleet_manager', 'admin'], H = {}, A = {};
 let plan = null;
 menu.driver = [['overview', 'Driver Console', '◫'], ['route', 'My Route', '⌖'], ['trips', 'Earnings', '₹'], ['fleet', 'My Vehicle', '◆']];
 
+const MAPS = {};                                   // one Leaflet map per container id; Leaflet refuses a second map on the same element
 function baseMap(id) {
   const n = document.getElementById(id); if (!n) return null;
+  if (MAPS[id]) { try { MAPS[id].remove(); } catch (e) {} delete MAPS[id]; }
   if (typeof L === 'undefined') { n.innerHTML = '<div class="empty">The map needs an internet connection.</div>'; return null; }
-  n.innerHTML = ''; const m = L.map(id).setView([26.9124, 75.7873], 12);
+  n.innerHTML = ''; const m = L.map(id).setView([26.9124, 75.7873], 12); MAPS[id] = m;
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(m); setTimeout(() => m.invalidateSize(), 150); return m;
 }
 const numIcon = (n, color) => L.divIcon({ html: `<div class="stopnum" style="background:${color}">${n}</div>`, className: '', iconSize: [26, 26], iconAnchor: [13, 13] });

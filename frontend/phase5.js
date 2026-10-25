@@ -4,6 +4,11 @@ const S = { open: false, history: [], busy: false, provider: '', mounted: false 
 let rec = null;
 const fmt = t => esc(t).replace(/\n/g, '<br>');
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+window.addEventListener('rn:logout', () => {            // never show or send the previous user's chat to the next person
+  S.open = false; S.history = []; S.started = false; S.busy = false; S.provider = '';
+  const p = document.getElementById('aiPanel'); if (!p) return;
+  p.classList.add('hidden'); document.getElementById('aiMsgs').innerHTML = ''; document.getElementById('aiChips').innerHTML = ''; document.getElementById('aiProv').textContent = 'starting…';
+});
 
 function mount() {
   if (S.mounted) return; S.mounted = true;

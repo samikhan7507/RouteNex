@@ -7,6 +7,9 @@ services:
       ROUTENEX_SECRET: ${ROUTENEX_SECRET:?Set ROUTENEX_SECRET (32+ random characters)}
       ROUTENEX_DB: /app/database/routenex.db
       DEMO_MODE: ${DEMO_MODE:-true}
+      ADMIN_NAME: ${ADMIN_NAME:-Sami Khan}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-samikhan@routenex.in}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
       - ./database:/app/database
     restart: unless-stopped

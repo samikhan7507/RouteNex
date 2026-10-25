@@ -6,7 +6,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 import config
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--name", default=os.getenv("ADMIN_NAME", "Sami Khan")); ap.add_argument("--email", default=os.getenv("ADMIN_EMAIL", "samikhan75706@gmail.com"))
+ap.add_argument("--name", default=os.getenv("ADMIN_NAME", "Sami Khan")); ap.add_argument("--email", default=os.getenv("ADMIN_EMAIL", "samikhan@routenex.in"))
 ap.add_argument("--show", action="store_true", help="show the admin password while typing")
 a = ap.parse_args()
 

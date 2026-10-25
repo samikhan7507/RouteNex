@@ -9,7 +9,7 @@ import time
 from db import init_db, one
 from routers import auth, shop, rides, fleet, ops, driver, wallet, ml, assistant
 from services.errors import ApiError
-from services.bootstrap import ensure_demo_data
+from services.bootstrap import ensure_demo_data, ensure_admin, ensure_catalog
 from services import mlserve
 
 
@@ -26,6 +26,8 @@ FRONTEND = config.ROOT / "frontend"
 async def lifespan(_):
     init_db()
     ensure_demo_data()
+    ensure_admin()                    # owner login from ADMIN_* environment variables
+    ensure_catalog()                  # shop items (no-op until services/catalog.py exists)
     mlserve.ensure_models()           # first start only: trains the models in the background (about 10 s)
     if config.INSECURE_SECRET:
         print("WARNING: ROUTENEX_SECRET is not set - using an insecure dev secret.")

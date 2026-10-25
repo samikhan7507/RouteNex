@@ -1,7 +1,8 @@
 """Demo-mode top-ups that run at startup (idempotent): ride fleet around Jaipur + welcome wallet credit."""
+import os
 import config
 from db import tx
-from security import hash_password
+from security import hash_password, verify_password
 from services import trips
 
 LOCS = [(26.9124, 75.7873), (26.8540, 75.8243), (26.9126, 75.7442), (26.8505, 75.7628), (26.8399, 75.8322), (26.8942, 75.8210),
@@ -38,3 +39,47 @@ def ensure_demo_data():
             for r in c.execute("SELECT id FROM users WHERE role='customer' AND wallet_balance=0").fetchall():
                 trips.wallet_credit(c, r["id"], 500.0, "topup", "Welcome credit (demo)")
             c.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('demo_wallet_v2','1')")
+
+
+def ensure_admin():
+    """Make the owner's admin login match ADMIN_NAME / ADMIN_EMAIL / ADMIN_PASSWORD (environment variables, never committed to git).
+    Safe to run on every start (idempotent):
+      * an account with that e-mail is updated in place; otherwise the lowest-id admin is renamed in place, so the old admin
+        disappears and every audit-trail row now shows the new name; otherwise a new admin is created
+      * every OTHER admin account is deactivated, so no public/demo admin login can remain
+    Does nothing unless both ADMIN_EMAIL and ADMIN_PASSWORD are set. Returns the admin's user id (or None)."""
+    email = (os.getenv("ADMIN_EMAIL") or "").strip().lower()
+    password = os.getenv("ADMIN_PASSWORD") or ""
+    name = (os.getenv("ADMIN_NAME") or "Sami Khan").strip()[:60] or "Sami Khan"
+    if not email or not password:
+        return None
+    if len(password) < 8:
+        print("WARNING: ADMIN_PASSWORD is shorter than 8 characters - fine on your laptop, but use a longer one before sharing a public link.")
+    with tx() as c:
+        row = c.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        verb = "updated"
+        if not row:
+            row = c.execute("SELECT * FROM users WHERE role='admin' ORDER BY id LIMIT 1").fetchone()
+            verb = "replaced"
+        if row:
+            uid = row["id"]
+            c.execute("UPDATE users SET name=?,email=?,role='admin',active=1 WHERE id=?", (name, email, uid))
+            if not verify_password(password, row["password_hash"] or ""):     # only re-hash when the password actually changed
+                c.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(password), uid))
+        else:
+            uid = c.execute("INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'admin')", (name, email, hash_password(password))).lastrowid
+            verb = "created"
+        c.execute("UPDATE users SET active=0 WHERE role='admin' AND id!=?", (uid,))
+        c.execute("INSERT INTO audit_logs(user_id,action,entity,entity_id,details) VALUES(?,?,?,?,?)", (uid, "ADMIN_SYNC", "user", str(uid), f"owner admin {verb} from environment"))
+    print(f"[admin] owner admin {verb}: {name} <{email}>")
+    return uid
+
+
+def ensure_catalog():
+    """Keeps the shop catalogue up to date. The catalogue lives in services/catalog.py (added in a later phase); until that file
+    exists this does nothing, so earlier phases keep working on their own."""
+    try:
+        from services import catalog
+    except ImportError:
+        return 0
+    return catalog.sync()
