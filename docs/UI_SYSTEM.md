@@ -1,18 +1,40 @@
-# RouteNex UI system
+# UI system
 
-The redesigned shell uses a full-width content canvas (`calc(100% - sidebar)`), fluid page gutters, reusable card/table/form primitives and responsive CSS Grid. Breakpoints are 1180px (dashboard reflow), 860px (compact sidebar) and 590px (single-column mobile).
+The v3 frontend is a light, accessible React SPA (React 19 + Vite) with a calm navy/white theme.
 
-## Experiences
-- **Customer:** simplified commerce, cart, delivery tracking and ride booking with low-density KPIs and clear actions.
-- **Operations/Admin:** denser enterprise KPIs, manifests, audit visibility, alert controls, fleet state, analytics and optimizer workflow.
+## Routes & guards
+| Path | Page | Roles |
+|---|---|---|
+| `/login` | Login (email / phone OTP) | public |
+| `/` | Home overview | all signed-in |
+| `/shop` | Catalogue, basket, checkout | customer/admin |
+| `/trips` | Ride & parcel booking | customer/admin |
+| `/orders` | Order history & detail | customer/admin |
+| `/wallet` | Wallet, top-up, offers | customer/admin |
+| `/driver` | Requests, trips, deliveries, earnings | driver |
+| `/operations` | Optimizer, alerts, events, forecast, ML | dispatcher/fleet_manager/admin |
+| `/fleet` | Vehicles, drivers, maintenance | fleet_manager/admin |
+| `/admin` | Sessions, users, audit, payments, catalogue, settlements | admin |
+| `/settings` | Profile, password, devices | all signed-in |
 
-## Optimizer workflow
-1. Select eligible pending orders.
-2. Select available capacity and driver-linked vehicles.
-3. Choose strategy and traffic multiplier.
-4. Generate persisted routes and monitor the route manifest.
-5. Trigger incidents for audited dynamic release and reassignment.
+## Shared components (`src/components/`)
+- `ui.jsx` — Button, Card, Badge, Field, Modal, Empty, ErrorBox, Loading, Stat, Table, Tabs, `useAsync`.
+- `PlaceSearch.jsx` — 300 ms debounced combobox backed by `/places/search`; keyboard navigable.
+- `MapView.jsx` — react-leaflet map, fit-bounds, click-to-pin, OSM tiles.
+- `PaymentModal.jsx` — demo simulate success/failure vs Razorpay Checkout + verify.
+- `Layout.jsx` — role navigation, 30 s notification polling, mark-read.
+- `Assistant.jsx` — propose → confirm → execute; never auto-runs actions.
 
-Maps use a large offline-safe route canvas so the app remains functional without third-party keys. The geometry, stop, ETA and vehicle fields are ready for a Google Maps or Mapbox renderer in production.
+## Conventions
+- API client (`src/api.js`) sends cookies, attaches CSRF to mutations, and refreshes an expired CSRF
+  token once before retrying.
+- Money is formatted with `money()` (en-IN); statuses are humanised with `titleCase()`.
+- Idempotency keys use `crypto.randomUUID()`.
+- Demo-only affordances (demo OTP notices, simulated payment buttons) render only when the API says
+  demo mode is enabled.
+- The PWA service worker caches the shell/static assets only; API responses are never cached.
 
-Tables are placed in horizontal overflow containers on narrow screens. Forms and KPI grids collapse progressively; navigation becomes an icon rail. All controls include focus styling, consistent touch targets and loading/error feedback.
+## Styling
+`src/styles.css` defines the design tokens and the class vocabulary used across pages
+(`.card`, `.stat-grid`, `.product-grid`, `.booking-grid`, `.timeline`, `.otp-box`, `.modal`, etc.),
+with responsive breakpoints at 1024 px and 760 px and a reduced-motion fallback.

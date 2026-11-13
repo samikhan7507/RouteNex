@@ -1,199 +1,165 @@
-<div align="center">
+# RouteNex
 
-# 🚚 RouteNex
+**Local commerce, rides, parcels and fleet operations for Jaipur — rebuilt as a production-shaped v3.**
 
-### Dynamic Logistics Routing & Fleet Coordination Hub
+RouteNex is one account for everyday essentials: shop a local catalogue, book a ride or send a parcel,
+pay by wallet/cash/UPI-card, and follow every handover with proof codes. Dispatchers plan immutable
+routes, drivers complete proof-verified work, fleet managers keep vehicles healthy, and admins see
+who is signed in, what changed and where money moved.
 
-Rides, parcels and a student shop on one platform, with a custom route optimizer, machine-learning ETAs and a safe, confirm-first AI assistant.
-
-[![Live demo](https://img.shields.io/badge/Live%20demo-routenex.onrender.com-5548e7?style=for-the-badge&logo=render&logoColor=white)](https://routenex.onrender.com)
-
-![Python](https://img.shields.io/badge/Python-3.12-3776ab?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-WAL-003b57?logo=sqlite&logoColor=white)
-![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-f7931e?logo=scikitlearn&logoColor=white)
-![Leaflet](https://img.shields.io/badge/Leaflet-OpenStreetMap-199900?logo=leaflet&logoColor=white)
-![PWA](https://img.shields.io/badge/PWA-installable-5a0fc8?logo=pwa&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-ready-2496ed?logo=docker&logoColor=white)
-
-</div>
+> v3 replaces the earlier SQLite/demo monolith. Money is integer **paise**, timestamps are
+> timezone-aware, sessions are database-backed and revocable, and production configuration
+> **fails closed** instead of silently seeding demo accounts.
 
 ---
 
-## ✨ What is RouteNex?
+## What works
 
-RouteNex is a full-stack capstone project that brings three everyday services together and runs them from one fleet:
-
-* 🚕 **Rides** (bike, auto, cab) with live road routing, nearby drivers, demand-aware fares and OTP-secured trips
-* 📦 **Parcels** with pickup and delivery OTPs, weight and size based pricing
-* 🛒 **A student shop** with 160+ real-world items (stationery, books, electronics, hostel and kitchen needs, groceries and more)
-
-Behind the screens there is a **custom vehicle-routing optimizer**, **three trained ML models** (ETA, delay risk, demand forecast) and an **AI assistant** that can look things up and, only after you press *Confirm*, book or cancel for you.
-
-> **Honest by design:** the ML models are trained on realistic *synthetic* Jaipur data, payments (UPI/card) are simulated, and demo drivers are driven by an autopilot. Every one of these is labelled inside the app.
-
-## 📸 Screenshots
-
-| Control room: Analytics & ML | Fleet & Drivers |
-|:--:|:--:|
-| ![Analytics and ML](docs/screenshots/analytics-ml.png) | ![Fleet and drivers](docs/screenshots/fleet-drivers.png) |
-
-| Customer home | Book a ride | Send a parcel |
-|:--:|:--:|:--:|
-| ![Customer home](docs/screenshots/customer-home.png) | ![Book a ride](docs/screenshots/book-a-ride.png) | ![Send a parcel](docs/screenshots/send-a-parcel.png) |
-
-## 🧩 Features
-
-| Role | What they can do |
+| Area | Highlights |
 |---|---|
-| **Customer** | Book rides and parcels, shop and check out, wallet top-up, coupons, live tracking, ratings, ride and order history, AI assistant |
-| **Driver** | Online/offline switch, job console with OTP start and finish, delivery route with stops and cash to collect, earnings (today / week / total), busy-area hints |
-| **Dispatcher** | Route optimizer (preview, then apply), live routes map, alerts, dynamic rerouting after a breakdown |
-| **Fleet manager** | Vehicles and drivers, documents, availability, maintenance status |
-| **Admin** | Everything above plus users, audit trail, analytics and ML dashboard, model retraining |
+| **Shop** | 190-product catalogue with real photos, server-side cart, coupons, stock reservations, COD/wallet/prepaid checkout, idempotent orders, proof-of-delivery |
+| **Rides & parcels** | Named place autocomplete, signed 5-minute fare quotes, transparent vehicle classes, driver matching, encrypted pickup/delivery codes, ratings, automatic refunds |
+| **Payments** | Wallet ledger, cash settled only on completion, Razorpay order/capture/verify/webhook flow, demo provider for local testing, webhook dedup, late-capture auto-refund |
+| **Operations** | Preview == apply route optimizer, stale-plan rejection, vehicle/driver double-booking protection, alerts, events, analytics |
+| **Fleet** | Vehicles, drivers, maintenance, breakdown handling |
+| **Admin** | Active sessions, users/roles, login history, audit trail, payments/refunds, catalogue, driver settlements |
+| **ML** | ETA/delay/demand models with **gated promotion** — only approved registry artifacts are served |
+| **PWA** | Installable React SPA, offline shell/static assets only; API responses are never cached |
 
-### 🧠 Route optimizer
-A purpose-built solver (`backend/services/vrp.py`, pure Python, no OR-Tools):
-* capacitated VRP with **soft time windows**, **priorities**, vehicle cost per km and shift limits
-* priority-ordered **cheapest insertion**, then **2-opt, relocate and swap** local search
-* uses real road distances from OSRM when online, with a safe straight-line fallback
-* every plan shows **before vs after** against the old nearest-neighbour planner (distance, lateness, cost, vehicles used)
-* **dynamic rerouting:** report a breakdown and the released orders are re-planned immediately
+## Architecture
 
-### 📈 Machine learning (`ml/`)
-Three scikit-learn gradient-boosting models trained with **temporal validation** (train on earlier days, test on the last days):
-
-| Model | Predicts | Baseline it must beat |
-|---|---|---|
-| ETA | trip / delivery minutes, with plain-language reasons ("Heavy traffic +4 min") | the old distance / speed formula |
-| Delay risk | probability that a delivery window is missed, per stop | base rate and the "less slack = riskier" rule |
-| Demand | requests per area per hour, 24 h forecast | same hour last week |
-
-A new model is promoted only if it passes its **quality gate**; otherwise the previous one stays live. If scikit-learn or the artifacts are missing, the app falls back to formulas and keeps working.
-
-### 🤖 AI assistant
-Works fully offline with a built-in rule engine, or with a local **Ollama** model or **Gemini** (optional). The model only *chooses a tool*; tools are **role-gated**, phone numbers and e-mails are **redacted** before anything leaves the machine, and anything that changes data needs an explicit **Confirm**.
-
-### 🔐 Security
-PBKDF2 password hashing (210,000 rounds), signed expiring tokens, role-based access control with ownership checks, rate limiting on login / OTP / assistant, hashed expiring OTPs, a strict Content-Security-Policy, an audit trail, and secrets read from the environment (never from code).
-
-### 📱 PWA
-Installable on phones, offline app shell, network-first updates, and API responses are never cached.
-
-## 🏗️ Architecture
-
-```mermaid
-flowchart LR
-  subgraph Browser["Browser (installable PWA)"]
-    UI["Vanilla JS single-page app<br/>Leaflet maps, SVG charts"]
-    SW["Service worker"]
-  end
-  UI -- "REST + signed token" --> API["FastAPI"]
-  API --> DB[("SQLite (WAL)")]
-  API --> VRP["Custom VRP solver"]
-  API --> ML["scikit-learn models"]
-  API --> AS["Assistant<br/>offline / Ollama / Gemini"]
-  UI --> OSM["OpenStreetMap tiles"]
-  UI --> OSRM["OSRM road routing"]
-  API --> OSRM
-  API --> WX["Open-Meteo weather"]
+```
+backend/app/
+  api/          FastAPI routers (auth, shop, trips, payments, wallet, places, driver, fleet, ops, admin, ml)
+  core/         settings, security (argon2id + sessions + CSRF), rate limits
+  services/     pricing, payments, trips, orders, dispatch, catalog, places, routing, coupons, weather, mlserve, assistant
+  models.py     30 PostgreSQL tables with CHECK/FK/partial-unique constraints
+  schemas.py    strict, extra-forbid input models
+  main.py       security middleware, request IDs, health/ready, SPA fallback
+frontend/       React 19 + Vite SPA (role-guarded routes, Leaflet maps, payment modal, assistant)
+migrations/     Alembic 0001 → 0002
+ml/             data/features/train + gated artifact registry
+scripts/        dev_db, bootstrap, worker, migrate_sqlite
 ```
 
-## 📁 Project structure
+The API serves the built SPA from `frontend/dist`. In development you can also run Vite on `:5173`
+with `/api` proxied to `:8000`.
 
-```text
-RouteNex/
-├── backend/            FastAPI app
-│   ├── app.py          entry point, security headers, routers
-│   ├── routers/        auth, shop, rides, driver, fleet, ops, wallet, ml, assistant
-│   ├── services/       trips, pricing, vrp, roads, weather, mlserve, catalog, assistant, llm ...
-│   └── tests/          pytest suite
-├── frontend/           single-page app (HTML, CSS, vanilla JS) + service worker
-├── ml/                 data generator, features, training and promotion gates
-├── database/           schema, demo seed, admin and reset tools
-├── docs/               architecture, API and security notes, screenshots
-├── Dockerfile  docker-compose.yml
-└── setup.bat  start.bat  start-phone.bat  preflight.bat  reset_demo.bat
-```
+---
 
-## 🚀 Run it locally
+## Quickstart (local demo)
 
-### Windows (easiest)
-1. Install **Python 3.12** (`winget install -e --id Python.Python.3.12`).
-2. Double-click **`setup.bat`** (one time, needs internet).
-3. Open `backend\.env` and set your own admin password: `ADMIN_PASSWORD=your-password` (and a long random `ROUTENEX_SECRET`).
-4. Double-click **`start.bat`** and open <http://localhost:8000>. API docs are at `/docs`.
+Requires **Python 3.11+**, **Node 22+**, and Linux/macOS for the optional embedded PostgreSQL.
 
-Handy extras: `start-phone.bat` (public HTTPS link for testing on a phone via Cloudflare Tunnel), `preflight.bat` (pre-demo checklist), `reset_demo.bat` (clean demo data).
-
-### Any OS
 ```bash
-python -m venv .venv && source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements-dev.txt
-cp backend/.env.example backend/.env                      # then edit it
-python database/seed.py --reset
-cd backend && uvicorn app:app --reload
+
+# Terminal 1 — embedded PostgreSQL (keep it running)
+python scripts/dev_db.py --init --write-env
+
+# Terminal 2 — schema, demo data, SPA build, API
+alembic upgrade head
+python scripts/bootstrap.py --demo
+(cd frontend && npm ci && npm run build)
+uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 --reload
+
+# Optional terminal 3 — background worker (reservation expiry, demo autopilot, training jobs)
+python scripts/worker.py
 ```
 
-### Docker
-```bash
-export ROUTENEX_SECRET="a-random-string-of-at-least-32-characters"
-export ADMIN_PASSWORD="choose-your-own"
-docker compose up --build
-```
+The API serves the built SPA from `frontend/dist`; rebuild after changing frontend source.
 
-### Run the tests
-```bash
-pytest
-```
-The suite covers auth and rate limits, role permissions, ride and parcel lifecycles, wallet and coupons, the optimizer and ML pipeline, the assistant, the PWA files and the shop catalogue.
+Open **http://localhost:8000**. For hot-reload frontend development run `npm run dev` and open
+**http://localhost:5173** instead.
 
-## 🔑 Demo accounts
+### Demo accounts (development only)
 
 | Role | Email | Password |
 |---|---|---|
+| Admin | `samikhan@gmail.com` | `sami@123` |
 | Customer | `customer@routenex.in` | `Demo@123` |
 | Driver | `driver@routenex.in` | `Demo@123` |
 | Dispatcher | `dispatcher@routenex.in` | `Demo@123` |
 | Fleet manager | `fleet@routenex.in` | `Demo@123` |
 
-The login screen also offers a **Google demo** profile and a **Mobile OTP** demo (number and code are pre-filled). The **admin** account is private: it is created from the `ADMIN_*` environment variables and is not part of the public demo.
+Demo phone OTP: `+919876543210` → code `123456`. Payments use the **demo** provider (simulate
+success/failure). These shortcuts are refused when `APP_ENV=production|staging`.
 
-## ⚙️ Configuration
+---
 
-All settings are environment variables (or `backend/.env`). The important ones:
+## Configuration
 
-| Variable | Purpose |
-|---|---|
-| `ROUTENEX_ENV` | `development` (default) or `production` (requires a 32+ character secret) |
-| `ROUTENEX_SECRET` | signs login tokens. **Always set your own long random value** |
-| `ROUTENEX_DB` | SQLite file path |
-| `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | the owner/admin login, created or updated on every start |
-| `DEMO_MODE` | demo OTP, demo Google profile and demo fleet/wallet credit |
-| `DEMO_AUTOPILOT` | simulated drivers move and finish trips by themselves |
-| `LLM_PROVIDER` | `auto`, `ollama`, `gemini` or `offline` |
-| `GEMINI_API_KEY`, `OLLAMA_MODEL` | optional assistant back-ends |
-| `CORS_ORIGINS` | allowed browser origins |
+Copy `.env.example` to `.env`. Important variables:
 
-## ☁️ Deploying
+- `DATABASE_URL` — PostgreSQL only (no SQLite runtime fallback).
+- `SECRET_KEY` — 32+ random characters; **required** in production/staging.
+- `APP_ENV`, `BASE_URL` — production requires HTTPS.
+- `DEMO_MODE`, `DEMO_AUTOPILOT`, `SEED_DEMO_DATA` — must all be `false` in production/staging.
+- `PAYMENT_PROVIDER=razorpay` + `RAZORPAY_KEY_ID/KEY_SECRET/WEBHOOK_SECRET` in production.
+- `OTP_PROVIDER=twilio` + Twilio credentials in production.
+- `ADMIN_EMAIL` / `ADMIN_PASSWORD` — unique, non-demo password required in production.
+- `LOCATION_PROVIDER`, `ROUTING_URL`, `TILE_URL`, `WEATHER_ENABLED` — maps/routing/weather.
+- `CORS_ORIGINS`, `TRUSTED_HOSTS` — browser allowlists (no wildcard credentialed CORS).
 
-The repository includes a `Dockerfile` that seeds demo data on first start and listens on `$PORT`, so it works on Render, Railway, Fly.io or any Docker host. Set `ROUTENEX_SECRET` and the `ADMIN_*` variables in the host's environment settings and use `/api/health` as the health check.
+See [docs/SECURITY.md](docs/SECURITY.md) for the full threat model and guarantees.
 
-> SQLite lives on the container's disk, so on free hosting tiers the data resets when the service restarts. For real use, move to PostgreSQL, Redis-backed rate limiting, a real SMS provider and verified Google sign-in.
+## Docker (production template)
 
-## 🗺️ Roadmap
-- PostgreSQL and Redis for multi-worker deployments
-- Real payment gateway and SMS provider adapters
-- GPS ingestion over WebSockets
-- Training the models on real trip data (`ml/data.py` has the hook)
+```bash
+cp .env.example .env       # fill POSTGRES_PASSWORD, SECRET_KEY, BASE_URL, ADMIN_*, Razorpay, Twilio…
+docker compose up --build
+```
 
-## 👤 Author
+The image builds the SPA, runs `alembic upgrade head`, bootstraps **only the configured admin**
+(never demo data in production), then starts Uvicorn. A separate `worker` service runs background
+jobs. The compose file fails fast if required secrets are missing.
 
-**Sami**, built RouteNex end to end: backend, optimizer, ML pipeline, assistant and UI.
+For a containerised *demo*, set `APP_ENV=development DEMO_MODE=true PAYMENT_PROVIDER=demo
+OTP_PROVIDER=console` in `.env` and run `python scripts/bootstrap.py --demo` against the compose DB.
 
-[![Email](https://img.shields.io/badge/Email-samikhan57705%40gmail.com-ea4335?logo=gmail&logoColor=white)](mailto:samikhan57705@gmail.com)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-samikhan07-0a66c2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/samikhan07)
-[![GitHub](https://img.shields.io/badge/GitHub-samikhan7507-181717?logo=github&logoColor=white)](https://github.com/samikhan7507)
-[![Portfolio](https://img.shields.io/badge/Portfolio-samikhan7507.github.io-5548e7)](https://samikhan7507.github.io/Sami-portfolio/)
+---
 
-If you like the project, a ⭐ on the repository is much appreciated.
+## Tests & checks
+
+```bash
+pytest -q                                   # 37 PostgreSQL-backed API/unit tests (uses routenex_test)
+ruff check backend/app scripts migrations ml backend/tests/v3
+cd frontend && npm test                     # Vitest unit tests
+cd frontend && npm run build                # production SPA build
+cd frontend && npm run test:e2e             # real Chromium E2E against a running demo API
+python tools/preflight.py                   # pre-demo smoke check (stdlib only)
+```
+
+CI (`.github/workflows/ci.yml`) runs lint + Alembic + pytest on PostgreSQL 16, then builds the SPA,
+runs Vitest, bootstraps a demo DB and exercises the browser E2E flow.
+
+## Migrating from v2 (SQLite)
+
+`scripts/migrate_sqlite.py` is a **one-way, transactional, dry-run-by-default** importer. The target
+must be a fresh PostgreSQL database at Alembic head (run it *before* `bootstrap.py`).
+
+```bash
+alembic upgrade head
+python scripts/migrate_sqlite.py --source /path/to/legacy-routenex.db            # dry-run report
+python scripts/migrate_sqlite.py --source /path/to/legacy-routenex.db --apply    # import
+python scripts/bootstrap.py                                                    # ensure admin
+```
+
+It converts rupees → paise, normalises delivery windows to IST, rotates legacy plaintext handover
+OTPs into encrypted 6-digit codes, preserves ledger/audit history, and refuses double-booked active
+routes/drivers. See [docs/MIGRATION.md](docs/MIGRATION.md).
+
+## API docs
+
+Interactive OpenAPI docs are available at **`/docs`** in development/test only (disabled in
+production). A concise endpoint map lives in [docs/API.md](docs/API.md).
+
+## Project notes
+
+- Optimized illustrative Pexels category photos are included; source/license credits are in
+  `frontend/public/products/credits.json`. Unused search thumbnails are not kept in the repository.
+- E2E screenshots are written to ignored `.local/screenshots/` (override with `SCREENSHOT_DIR`).
+- Maps use OpenStreetMap tiles; routing prefers OSRM and falls back to a clearly labelled estimate.
+- The assistant proposes actions but **never executes them without explicit confirmation**.
+- ML candidates are promoted only when they beat the incumbent by the configured gates.

@@ -1,20 +1,80 @@
+# Production template. Copy .env.example to .env and fill every required value.
+# For a local demo instead: APP_ENV=development DEMO_MODE=true PAYMENT_PROVIDER=demo OTP_PROVIDER=console.
 services:
-  routenex:
-    build: .
-    ports: ["8000:8000"]
+  db:
+    image: postgres:16-alpine
     environment:
-      ROUTENEX_ENV: production
-      ROUTENEX_SECRET: ${ROUTENEX_SECRET:?Set ROUTENEX_SECRET (32+ random characters)}
-      ROUTENEX_DB: /app/database/routenex.db
-      DEMO_MODE: ${DEMO_MODE:-true}
-      ADMIN_NAME: ${ADMIN_NAME:-Sami Khan}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-samikhan@routenex.in}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      POSTGRES_USER: routenex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: routenex
     volumes:
-      - ./database:/app/database
+      - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
-      interval: 20s
-      timeout: 3s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U routenex -d routenex"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://routenex:${POSTGRES_PASSWORD}@db:5432/routenex
+      APP_ENV: ${APP_ENV:-production}
+      BASE_URL: ${BASE_URL:?Set BASE_URL (https in production)}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY (32+ random characters)}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      DEMO_AUTOPILOT: ${DEMO_AUTOPILOT:-false}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      ADMIN_NAME: ${ADMIN_NAME:-Sami Khan}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set a unique ADMIN_PASSWORD}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-razorpay}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      OTP_PROVIDER: ${OTP_PROVIDER:-twilio}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      LOCATION_PROVIDER: ${LOCATION_PROVIDER:-local}
+      GEOAPIFY_API_KEY: ${GEOAPIFY_API_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["python", "scripts/worker.py"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://routenex:${POSTGRES_PASSWORD}@db:5432/routenex
+      APP_ENV: ${APP_ENV:-production}
+      BASE_URL: ${BASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      DEMO_AUTOPILOT: ${DEMO_AUTOPILOT:-false}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-razorpay}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      OTP_PROVIDER: ${OTP_PROVIDER:-twilio}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      LOCATION_PROVIDER: ${LOCATION_PROVIDER:-local}
+      ML_AUTOTRAIN: ${ML_AUTOTRAIN:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

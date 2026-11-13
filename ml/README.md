@@ -1,15 +1,30 @@
 # RouteNex ML
 
-Three scikit-learn gradient-boosting models, trained with `python ml\train.py` (or the **Retrain models** button on Analytics & ML):
+RouteNex includes an optional, gated ML pipeline for ETA, delivery-delay risk and demand forecasts.
 
-| Model | Predicts | Used for | Baseline it must beat |
-|---|---|---|---|
-| `eta` | trip / delivery minutes | ETAs shown when booking rides and parcels (+ plain-language reasons) | the old formula: distance / speed x peak factor |
-| `delay` | P(delivery window missed) per stop | risk badge on every optimizer stop, saved with the route | base rate, and the rule "less slack = riskier" |
-| `demand` | requests per area per hour | 24 h forecast, busy-area hints for drivers, small surge nudge (max +-10%) | same hour last week (seasonal naive) |
+From the repository root, with the Python environment activated:
 
-* **Validation is temporal**: train on earlier days, test on the last days (never a random split).
-* **Quality gates** (`GATES` in `train.py`): a new model is promoted into `artifacts/registry.json` only if it passes; otherwise the previous one stays live.
-* **Explanations**: ETA reasons ("Heavy traffic +4 min") and delay reasons ("Tight window") come from re-predicting with one factor neutralised; the Analytics page also shows permutation importance.
-* **Graceful fallback**: no scikit-learn or no artifacts -> formulas / rules are used and the app keeps working.
-* **Data is synthetic** (`data.py`). There is no public per-trip dataset for Jaipur. Real data hook: `data.load_real()`. Weather (Open-Meteo), fleet and request counts shown in the app are real.
+```bash
+python ml/train.py
+```
+
+Or queue a training job from the Operations ML tab / `POST /api/ml/train` and run the background
+worker (`python scripts/worker.py`).
+
+| Model | Target | Promotion gate |
+|---|---|---|
+| `eta` | Trip/delivery duration in minutes | At least 5% MAE improvement over the formula and R² ≥ 0.5 |
+| `delay` | Delivery-window miss probability | ROC AUC ≥ 0.70 |
+| `demand` | Requests per area/hour | MAE no worse than the same-hour-last-week baseline |
+
+- Validation is **temporal**: earlier days train the candidate; later days test it.
+- Candidates are versioned under `ml/artifacts/` (configurable with `ML_ARTIFACT_DIR`).
+- Only candidates passing their gates enter `registry.json`; publication uses an atomic replace.
+- Serving reads the active registry, not the latest candidate. Rejected models never become live.
+- Reports retain metrics and promotion decisions. Generated artifacts are git-ignored.
+- Without an available artifact, the application uses explicitly labelled heuristic fallbacks.
+
+**Data limitation:** the included training data is synthetic (`data.py`). Its metrics validate the
+pipeline, not real-world Jaipur accuracy. ML predictions are labelled `ml-synthetic`. Replace the
+training-data loader with approved operational data and revalidate before using predictions for real
+dispatch decisions. Weather inputs can use Open-Meteo when reachable, with a labelled offline fallback.
