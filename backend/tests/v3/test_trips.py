@@ -1,7 +1,21 @@
 import uuid
 
+import pytest
+
+from app.services import routing
+from app.services.common import paise
+
 PICKUP = {"name": "Malviya Nagar", "lat": 26.8540, "lng": 75.8243}
 DROP = {"name": "Vaishali Nagar", "lat": 26.9126, "lng": 75.7442}
+
+
+@pytest.fixture
+def fractional_paise_route(monkeypatch):
+    """Reproduce CI's boundary fare without network access: 13.56 km -> 11492 paise."""
+    monkeypatch.setattr(routing, "route", lambda pickup, drop: {
+        "distance_km": 13.56, "duration_min": 27.1, "source": "estimate",
+        "geometry": [list(pickup), list(drop)],
+    })
 
 
 def quote(client, headers, kind="ride", weight=1):
@@ -17,13 +31,15 @@ def book(client, headers, q, cls, method="cash", **extra):
     return client.post("/api/trips", json=body, headers=headers)
 
 
-def test_ride_cash_lifecycle_with_proof_and_earnings(client, seed, login, role_client):
+def test_ride_cash_lifecycle_with_proof_and_earnings(client, seed, login, role_client, fractional_paise_route):
     headers = login("cust@test.in")
     q = quote(client, headers)
     assert {x["vehicle_class"] for x in q["quotes"]} == {"bike", "auto", "cab"}
     r = book(client, headers, q, "bike")
     assert r.status_code == 201, r.text
     t = r.json()
+    assert t["distance_km"] == 13.56
+    assert t["total"] == 114.92  # fractional-paise commission boundary from CI
     assert t["status"] == "searching"
     assert t["pickup_otp"] and len(t["pickup_otp"]) == 6
 
@@ -46,7 +62,15 @@ def test_ride_cash_lifecycle_with_proof_and_earnings(client, seed, login, role_c
     assert done.json()["payment_status"] == "paid"  # cash settled only on completion
 
     earn = driver.get("/api/driver/earnings", headers=dh).json()
-    assert earn["entries"][0]["net"] == round(t["total"] * 0.8, 2)
+    entry = earn["entries"][0]
+    gross, net, fee = (paise(entry[key]) for key in ("gross", "net", "platform_fee"))
+    assert gross == paise(t["total"]) == 11492
+    assert net == gross * 80 // 100 == 9193
+    assert fee == gross - net == 2299
+    assert net + fee == gross
+    assert entry["trip_id"] == t["id"]
+    assert entry["status"] == "payable"
+    assert paise(earn["payable"]) == net
     assert earn["commission_rate"] == 0.20
     rate = client.post(f"/api/trips/{t['id']}/rate", json={"rating": 5, "review": "Great"}, headers=headers)
     assert rate.status_code == 200, rate.text
