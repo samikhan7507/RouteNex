@@ -42,7 +42,8 @@ def test_quote_signature_roundtrip_tamper_and_expiry(monkeypatch):
     raw, sig = token.split(".")
     with pytest.raises(HTTPException):
         pricing.read_quote(raw + "." + "0" * 64, 7)
-    monkeypatch.setattr(pricing.time, "time", lambda: pricing.time.time() + 400)
+    real_time = pricing.time.time  # capture before patching; a self-referential mock hides expiry bugs
+    monkeypatch.setattr(pricing.time, "time", lambda: real_time() + 400)
     with pytest.raises(HTTPException):
         pricing.read_quote(token, 7)
 

@@ -33,6 +33,7 @@ jobs:
       PAYMENT_PROVIDER: demo
       OTP_PROVIDER: console
       LOCATION_PROVIDER: local
+      ROUTING_URL: ""
       WEATHER_ENABLED: "false"
       ADMIN_EMAIL: admin@test.in
       ADMIN_PASSWORD: TestAdmin@12345
@@ -76,6 +77,7 @@ jobs:
       PAYMENT_PROVIDER: demo
       OTP_PROVIDER: console
       LOCATION_PROVIDER: local
+      ROUTING_URL: ""
       WEATHER_ENABLED: "false"
       ADMIN_EMAIL: samikhan@gmail.com
       ADMIN_PASSWORD: sami@123

@@ -18,6 +18,8 @@
 
 ## Money & state integrity
 - All money is integer **paise**; inputs reject more than two decimal places.
+- Driver net is `gross_paise * 80 // 100`: fractional paise are truncated from net and retained in
+  the platform fee, so `gross = net + fee` exactly. Tests pin this boundary rather than rounding floats.
 - Wallet changes are ledger entries under a user row lock; balances have a non-negative CHECK.
 - Lock order is documented and consistent (User → Payment → Order/Trip/Product) to avoid deadlocks.
 - Orders/trips/checkouts require **idempotency keys**; replays return the original result.

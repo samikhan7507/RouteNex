@@ -152,6 +152,7 @@ def advance(db: Session, user: User, trip: Trip, action: str, code: str | None =
             payments.settle_cash(db, "trip", trip)
         trip.status, trip.completed_at = "completed", utcnow()
         release_driver(db, trip)
+        # Truncate fractional paise from driver net; the fee retains the remainder so gross = net + fee.
         net = trip.total_paise * 80 // 100
         db.add(DriverEarning(driver_id=trip.driver_id, trip_id=trip.id, gross_paise=trip.total_paise,
                              platform_fee_paise=trip.total_paise - net, net_paise=net))

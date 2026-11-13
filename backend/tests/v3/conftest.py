@@ -22,6 +22,7 @@ os.environ.update(
     PAYMENT_PROVIDER="demo",
     OTP_PROVIDER="console",
     LOCATION_PROVIDER="local",
+    ROUTING_URL="",  # deterministic offline estimates; tests must not depend on public OSRM
     WEATHER_ENABLED="false",
     ML_AUTOTRAIN="false",
     ADMIN_EMAIL="admin@test.in",
