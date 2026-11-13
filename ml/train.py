@@ -1,12 +1,16 @@
-"""Train, validate and promote RouteNex models.   Run:  python ml\\train.py        (from the project folder)
+"""Train, validate and promote RouteNex models.   Run:  python ml/train.py        (from the project folder)
 
 Three scikit-learn gradient-boosting models:
   eta     - trip / delivery duration (minutes)      baseline = old formula: distance / free-flow speed x peak factor
   delay   - P(delivery window missed) per stop      baseline = base rate and the rule 'less slack = riskier'
   demand  - requests per area per hour (Poisson)    baseline = same hour last week (seasonal naive)
 Validation is TEMPORAL (train on earlier days, test on the last days). A model is promoted into registry.json only if it passes its gate.
-Data is synthetic (see data.py) - the metrics prove the pipeline, not real-world accuracy."""
-import json, sys, time, pathlib
+Data is synthetic (see data.py): metrics validate the pipeline, NOT real-world accuracy. Rejected candidates never enter the serving registry."""
+import json
+import sys
+import time
+import pathlib
+from pathlib import Path
 import numpy as np
 import joblib
 import sklearn
@@ -99,29 +103,51 @@ def train_demand(days, seed):
     return m, metrics, float(np.mean(y[tr]))
 
 
-def run(out_dir, n_eta=40000, n_delay=30000, days=70, seed=7, log=print):
-    out = pathlib.Path(out_dir); out.mkdir(parents=True, exist_ok=True)
-    version = time.strftime("%Y%m%d-%H%M%S")
+def run(out_dir, n_eta=6000, n_delay=5000, days=40, seed=7, log=print):
+    """Train candidates, gate them, and atomically publish only passing artifacts."""
+    import os
+    import uuid
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "reports").mkdir(exist_ok=True)
+    version = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
     reg_path = out / "registry.json"
     registry = json.loads(reg_path.read_text()) if reg_path.exists() else {}
-    report = {"version": version, "trained_at": time.strftime("%Y-%m-%d %H:%M:%S"), "data": "synthetic", "sklearn": sklearn.__version__, "models": {}}
-    jobs = [("eta", lambda: train_eta(n_eta, seed)), ("delay", lambda: train_delay(n_delay, seed)), ("demand", lambda: train_demand(days, seed))]
+    report = {"version": version, "trained_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "data": "synthetic", "sklearn": sklearn.__version__, "models": {}}
+    jobs = [("eta", lambda: train_eta(n_eta, seed)), ("delay", lambda: train_delay(n_delay, seed)),
+            ("demand", lambda: train_demand(days, seed))]
     for name, fn in jobs:
-        t0 = time.time(); res = fn(); model, metrics = res[0], res[1]
+        t0 = time.time()
+        res = fn()
+        model, metrics = res[0], res[1]
         g = GATES[name]
-        if name == "eta": passed = metrics["mae_improvement_pct"] >= g["mae_improvement_pct_min"] and metrics["r2"] >= g["r2_min"]
-        elif name == "delay": passed = metrics["auc"] >= g["auc_min"]
-        else: passed = metrics["mae_improvement_pct"] >= g["mae_improvement_pct_min"]
+        if name == "eta":
+            passed = metrics["mae_improvement_pct"] >= g["mae_improvement_pct_min"] and metrics["r2"] >= g["r2_min"]
+        elif name == "delay":
+            passed = metrics["auc"] >= g["auc_min"]
+        else:
+            passed = metrics["mae_improvement_pct"] >= g["mae_improvement_pct_min"]
         meta = {"metrics_summary": {k: v for k, v in metrics.items() if not isinstance(v, list)}}
-        if name == "demand": meta["mean_demand"] = res[2]; meta["dispersion"] = metrics["dispersion"]
+        if name == "demand":
+            meta["mean_demand"] = res[2]
+            meta["dispersion"] = metrics["dispersion"]
         file = _save(out, name, model, {"eta": F.ETA_FEATURES, "delay": F.DELAY_FEATURES, "demand": F.DEMAND_FEATURES}[name], meta, version)
+        summary = {k: v for k, v in metrics.items() if not isinstance(v, list)}
         if passed:
-            registry[name] = {"current": file, "version": version, "history": (registry.get(name, {}).get("history", []) + [file])[-5:]}
-        report["models"][name] = {"version": version, "file": file, "promoted": bool(passed), "gate": g, "metrics": metrics, "seconds": round(time.time() - t0, 1)}
-        log(f"[{name}] {'PROMOTED' if passed else 'REJECTED (kept previous)'}  {json.dumps({k: v for k, v in metrics.items() if not isinstance(v, list)})}")
-    registry["trained_at"], registry["version"] = report["trained_at"], version
-    (out / "metrics.json").write_text(json.dumps(report, indent=1))
-    reg_path.write_text(json.dumps(registry, indent=1))
+            previous = registry.get(name, {})
+            registry[name] = {"current": file, "version": version, "promoted_at": report["trained_at"],
+                              "metrics_summary": summary, "history": (previous.get("history", []) + [file])[-5:]}
+        report["models"][name] = {"version": version, "file": file, "promoted": bool(passed), "gate": g,
+                                  "metrics": metrics, "active_version": registry.get(name, {}).get("version"),
+                                  "seconds": round(time.time() - t0, 1)}
+        log(f"[{name}] {'PROMOTED' if passed else 'REJECTED (kept previous)'} {json.dumps(summary)}")
+    report["active_registry"] = {n: {k: v for k, v in e.items() if k != "history"} for n, e in registry.items()}
+    (out / "reports" / f"{version}.json").write_text(json.dumps(report, indent=2))
+    (out / "metrics.json").write_text(json.dumps(report, indent=2))
+    tmp = out / "registry.json.tmp"
+    tmp.write_text(json.dumps(registry, indent=2))
+    os.replace(tmp, reg_path)
     return report
 
 

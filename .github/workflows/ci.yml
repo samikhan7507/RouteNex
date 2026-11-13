@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "arena/**"]
+  pull_request:
+
+jobs:
+  backend:
+    name: API + PostgreSQL tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: routenex
+          POSTGRES_PASSWORD: routenex
+          POSTGRES_DB: routenex_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U routenex -d routenex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://routenex:routenex@localhost:5432/routenex_test
+      TEST_DATABASE_URL: postgresql+psycopg://routenex:routenex@localhost:5432/routenex_test
+      APP_ENV: test
+      SECRET_KEY: ci-only-routenex-test-secret-0000000001
+      DEMO_MODE: "true"
+      DEMO_AUTOPILOT: "false"
+      SEED_DEMO_DATA: "false"
+      PAYMENT_PROVIDER: demo
+      OTP_PROVIDER: console
+      LOCATION_PROVIDER: local
+      WEATHER_ENABLED: "false"
+      ADMIN_EMAIL: admin@test.in
+      ADMIN_PASSWORD: TestAdmin@12345
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Python dependencies
+        run: pip install -r backend/requirements-dev.txt
+      - name: Lint
+        run: ruff check backend/app scripts migrations ml backend/tests/v3 tools
+      - name: Migrate
+        run: alembic upgrade head
+      - name: Test
+        run: pytest -q
+
+  web:
+    name: Frontend build + browser E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: routenex
+          POSTGRES_PASSWORD: routenex
+          POSTGRES_DB: routenex
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U routenex -d routenex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://routenex:routenex@localhost:5432/routenex
+      APP_ENV: development
+      SECRET_KEY: ci-only-routenex-web-secret-0000000001
+      DEMO_MODE: "true"
+      DEMO_AUTOPILOT: "false"
+      SEED_DEMO_DATA: "true"
+      PAYMENT_PROVIDER: demo
+      OTP_PROVIDER: console
+      LOCATION_PROVIDER: local
+      WEATHER_ENABLED: "false"
+      ADMIN_EMAIL: samikhan@gmail.com
+      ADMIN_PASSWORD: sami@123
+      BASE_URL: http://127.0.0.1:8000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          cd frontend && npm ci
+      - name: Prepare demo database
+        run: |
+          alembic upgrade head
+          python scripts/bootstrap.py --demo
+      - name: Build and unit-test frontend
+        run: |
+          cd frontend
+          npm run build
+          npm test
+      - name: Start API and run browser E2E
+        run: |
+          python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 > /tmp/routenex-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/api/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8000/api/ready
+          cd frontend && npm run test:e2e
+      - name: API log on failure
+        if: failure()
+        run: cat /tmp/routenex-api.log

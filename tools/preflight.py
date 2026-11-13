@@ -1,91 +1,129 @@
-"""RouteNex pre-demo check. Start the app first (start.bat), then run preflight.bat. Uses only the standard library.
-Prints OK / WARN / FAIL for everything that can embarrass you on stage, with the fix next to each problem."""
-import json, os, shutil, sys, time, urllib.request, urllib.error
+"""RouteNex v3 pre-demo check (standard library only).
 
-BASE = os.getenv("ROUTENEX_URL", "http://localhost:8000")
-RESULTS = []
+Start the API first, then: python tools/preflight.py
+Uses cookie sessions + CSRF exactly like the browser; never prints secrets.
+"""
+from __future__ import annotations
+
+import http.cookiejar
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+BASE = os.getenv("ROUTENEX_URL", "http://localhost:8000").rstrip("/")
+RESULTS: list[str] = []
 
 
-def say(level, name, detail="", fix=""):
+def say(level: str, name: str, detail: str = "", fix: str = ""):
     RESULTS.append(level)
-    icon = {"OK": "[ OK ]", "WARN": "[WARN]", "FAIL": "[FAIL]"}[level]
-    print(f"{icon} {name}" + (f" - {detail}" if detail else ""))
+    print(f"[{level:^4}] {name}" + (f" — {detail}" if detail else ""))
     if fix and level != "OK":
         print(f"        fix: {fix}")
 
 
-def call(path, method="GET", body=None, token=None, timeout=6):
-    req = urllib.request.Request(BASE + path, method=method, data=json.dumps(body).encode() if body is not None else None,
-                                 headers={"Content-Type": "application/json", **({"Authorization": "Bearer " + token} if token else {})})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.load(r)
+class Client:
+    def __init__(self):
+        self.cookies = http.cookiejar.CookieJar()
+        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
+        self.csrf = ""
 
+    def call(self, path, method="GET", body=None, headers=None, timeout=8):
+        data = json.dumps(body).encode() if body is not None else None
+        hdrs = {"Content-Type": "application/json", **(headers or {})}
+        if method not in ("GET", "HEAD") and self.csrf:
+            hdrs["X-CSRF-Token"] = self.csrf
+        req = urllib.request.Request(BASE + path, method=method, data=data, headers=hdrs)
+        with self.opener.open(req, timeout=timeout) as r:
+            raw = r.read()
+            return json.loads(raw) if raw else {}, r.headers
 
-def login(email, pw="Demo@123"):
-    try:
-        return call("/api/auth/login", "POST", {"email": email, "password": pw})["access_token"]
-    except Exception:
-        return None
-
-
-def online(url, timeout=3):
-    try:
-        urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "routenex-preflight"}), timeout=timeout).read(64)
-        return True
-    except Exception:
-        return False
+    def login(self, email, password="Demo@123"):
+        data, _ = self.call("/api/auth/login", "POST", {"email": email, "password": password})
+        self.csrf = data.get("csrf_token", "")
+        return data
 
 
 def main():
-    print(f"RouteNex pre-demo check against {BASE}\n")
+    print(f"RouteNex v3 preflight against {BASE}\n")
+    anon = Client()
     try:
-        h = call("/api/health")
-        say("OK" if h.get("status") == "healthy" else "FAIL", "Server and database", h.get("status", "?"))
-    except Exception as e:
-        say("FAIL", "Server is not reachable", str(e)[:80], "double-click start.bat and wait for 'Application startup complete'")
+        health, headers = anon.call("/api/health")
+        ok = health.get("status") == "ok" and health.get("version", "").startswith("3.")
+        say("OK" if ok else "FAIL", "API health", f"{health.get('service')} {health.get('version')}",
+            "start uvicorn app.main:app --app-dir backend --port 8000")
+        say("OK" if headers.get("X-Content-Type-Options") == "nosniff" else "WARN", "Security headers",
+            "nosniff + CSP present" if headers.get("Content-Security-Policy") else "missing CSP")
+        ready, _ = anon.call("/api/ready")
+        say("OK" if ready.get("status") == "ready" else "FAIL", "Database readiness", str(ready),
+            "run alembic upgrade head and check DATABASE_URL")
+    except Exception as exc:
+        say("FAIL", "API reachable", str(exc)[:100], "start the API and PostgreSQL first")
         return summary()
-    cust, disp, drv = login("customer@routenex.in"), login("dispatcher@routenex.in"), login("driver@routenex.in")
-    for who, tok in (("customer", cust), ("dispatcher", disp), ("driver", drv)):
-        say("OK" if tok else "WARN", f"Demo login: {who}", "works" if tok else "failed", "run reset_demo.bat to restore the demo accounts")
-    if cust:
-        try:
-            w = call("/api/wallet", token=cust)["balance"]
-            say("OK" if w >= 300 else "WARN", "Customer wallet", f"Rs {w:.0f}", "top up from the Wallet page, or run reset_demo.bat")
-            a = call("/api/assistant/status", token=cust)
-            say("OK", "Assistant engine", a["provider"] + (" (private, local)" if a["provider"].startswith("ollama") else " (built-in, no AI model)" if a["provider"] == "offline" else " (cloud)"))
-            est = call("/api/rides/estimate", "POST", {"pickup": "C-Scheme", "pickup_lat": 26.9124, "pickup_lng": 75.7873, "dropoff": "Airport", "drop_lat": 26.8242, "drop_lng": 75.8122}, token=cust)
-            near = max(o["nearby"] for o in est["options"])
-            say("OK" if near else "WARN", "Ride estimate and nearby drivers", f"{len(est['options'])} options, ETA source: {est.get('eta_source')}", "restart the app; demo drivers are created at startup")
-            if est.get("eta_source") != "ml":
-                say("WARN", "ML ETA", "using the formula fallback", "wait ~10 s after startup, or install scikit-learn (start.bat does) and restart")
-        except Exception as e:
-            say("FAIL", "Customer flow", str(e)[:90])
-    if disp:
-        try:
-            st = call("/api/ml/status", token=disp)
-            ready = all(st["models"].values())
-            say("OK" if ready else "WARN", "ML models", "all 3 trained" + (" (training...)" if st["training"] else "") if ready else f"not ready: {st['models']}", "wait 10 s and rerun; or admin: Analytics & ML -> Retrain models")
-            ov = call("/api/optimizer/overview", token=disp)
-            say("OK" if ov["pending"] >= 3 and ov["vehicles"] >= 3 else "WARN", "Optimizer has work to do", f"{ov['pending']} orders waiting, {ov['vehicles']} vehicles ready", "run reset_demo.bat for fresh demo data (or place 3+ orders as a customer)")
-        except Exception as e:
-            say("FAIL", "Operations flow", str(e)[:90])
-    net = {"OpenStreetMap tiles": "https://a.tile.openstreetmap.org/0/0/0.png", "Road routing (OSRM)": "https://router.project-osrm.org/route/v1/driving/75.78,26.91;75.81,26.82?overview=false",
-           "Live weather (Open-Meteo)": "https://api.open-meteo.com/v1/forecast?latitude=26.91&longitude=75.79&current=temperature_2m"}
-    for name, url in net.items():
-        ok_ = online(url); say("OK" if ok_ else "WARN", name, "reachable" if ok_ else "NOT reachable", "maps and routes need internet; check Wi-Fi or switch the laptop to your phone hotspot")
-    say("OK" if shutil.which("cloudflared") else "WARN", "cloudflared (phone link)", "installed" if shutil.which("cloudflared") else "not found", "winget install --id Cloudflare.cloudflared, then reopen the window")
+
     try:
-        tags = json.load(urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=1))
-        say("OK", "Ollama (optional local AI)", ", ".join(m["name"] for m in tags.get("models", [])) or "running, no model pulled")
-    except Exception:
-        say("OK", "Ollama (optional local AI)", "not running - assistant uses the built-in engine, which is fine")
-    summary()
+        html = urllib.request.urlopen(BASE + "/shop", timeout=8).read().decode("utf-8", "ignore")
+        say("OK" if "RouteNex" in html else "FAIL", "React SPA served", "/shop returns the app shell",
+            "run cd frontend && npm run build")
+    except Exception as exc:
+        say("FAIL", "React SPA served", str(exc)[:80], "run cd frontend && npm run build")
+
+    accounts = [("customer", "customer@routenex.in"), ("driver", "driver@routenex.in"),
+                ("dispatcher", "dispatcher@routenex.in"), ("admin", os.getenv("ADMIN_EMAIL", "samikhan@gmail.com"))]
+    clients = {}
+    for role, email in accounts:
+        c = Client()
+        try:
+            pw = os.getenv("ADMIN_PASSWORD", "sami@123") if role == "admin" else "Demo@123"
+            user = c.login(email, pw)
+            clients[role] = c
+            say("OK", f"Login: {role}", user.get("user", {}).get("email", email))
+        except Exception as exc:
+            say("WARN" if role != "admin" else "FAIL", f"Login: {role}", str(exc)[:80],
+                "run python scripts/bootstrap.py --demo (development only)")
+
+    if "customer" in clients:
+        c = clients["customer"]
+        try:
+            products, _ = c.call("/api/products?page_size=1")
+            total = products.get("total", 0)
+            say("OK" if total >= 50 else "WARN", "Catalogue", f"{total} products",
+                "run python scripts/bootstrap.py --catalog")
+            places, _ = c.call("/api/places/search?q=mal")
+            say("OK" if places.get("results") else "WARN", "Place search", f"{len(places.get('results', []))} results for 'mal'")
+            wallet, _ = c.call("/api/wallet")
+            say("OK", "Wallet", f"₹{wallet.get('balance', 0):.2f}")
+            quote, _ = c.call("/api/trips/quote", "POST", {"kind": "ride",
+                "pickup": {"name": "Malviya Nagar", "lat": 26.854, "lng": 75.8243},
+                "drop": {"name": "Vaishali Nagar", "lat": 26.9126, "lng": 75.7442}})
+            say("OK" if quote.get("quotes") else "WARN", "Fare quote", f"{len(quote.get('quotes', []))} vehicle classes")
+        except Exception as exc:
+            say("FAIL", "Customer flow", str(exc)[:100])
+
+    if "dispatcher" in clients:
+        try:
+            s, _ = clients["dispatcher"].call("/api/optimizer/summary")
+            say("OK", "Dispatch summary", f"{s.get('pending_orders', 0)} pending, {s.get('available_vehicles', 0)} vehicles")
+        except Exception as exc:
+            say("FAIL", "Operations flow", str(exc)[:100])
+
+    if "admin" in clients:
+        try:
+            sessions, _ = clients["admin"].call("/api/admin/sessions")
+            rows = sessions if isinstance(sessions, list) else sessions.get("sessions", [])
+            say("OK", "Admin session visibility", f"{len(rows)} active sessions")
+        except Exception as exc:
+            say("FAIL", "Admin flow", str(exc)[:100])
+
+    return summary()
 
 
 def summary():
-    f, w = RESULTS.count("FAIL"), RESULTS.count("WARN")
-    print("\n" + ("READY FOR THE DEMO" if not f and not w else "Ready, with warnings above" if not f else "NOT READY - fix the [FAIL] lines first"))
-    sys.exit(1 if f else 0)
+    fails, warns = RESULTS.count("FAIL"), RESULTS.count("WARN")
+    print("\n" + ("READY FOR THE DEMO" if not fails and not warns else
+                  "Ready, with warnings above" if not fails else "NOT READY — fix the [FAIL] lines first"))
+    sys.exit(1 if fails else 0)
 
 
 if __name__ == "__main__":

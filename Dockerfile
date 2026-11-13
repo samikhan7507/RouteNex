@@ -1,15 +1,32 @@
-FROM python:3.12-slim
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+# RouteNex v3 — multi-stage production image (React SPA + FastAPI + PostgreSQL client).
+FROM node:22-alpine AS web
+WORKDIR /web
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+FROM python:3.11-slim
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    APP_ENV=production \
+    DEMO_MODE=false \
+    DEMO_AUTOPILOT=false \
+    SEED_DEMO_DATA=false \
+    PAYMENT_PROVIDER=razorpay \
+    OTP_PROVIDER=twilio \
+    LOCATION_PROVIDER=local
 WORKDIR /app
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
-COPY backend backend
-COPY frontend frontend
-COPY database database
+COPY backend/app backend/app
+COPY alembic.ini ./
+COPY migrations migrations
+COPY scripts scripts
 COPY ml ml
-ENV ROUTENEX_DB=/app/database/routenex.db
-WORKDIR /app/backend
+COPY --from=web /web/dist frontend/dist
 EXPOSE 8000
-# Seeds demo data the first time (no DB yet), then starts the API.
-# 1 worker on purpose: SQLite + in-memory rate limiter. Move to Postgres + Redis before scaling workers.
-CMD ["sh","-c","[ -f \"$ROUTENEX_DB\" ] || python /app/database/seed.py --reset; exec uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips='*'"]
+HEALTHCHECK --interval=20s --timeout=5s --retries=5 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"
+# Migrations are explicit; bootstrap only ensures the configured admin (never seeds demo data in production).
+CMD ["sh", "-c", "alembic upgrade head && python scripts/bootstrap.py && exec uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
