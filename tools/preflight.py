@@ -69,19 +69,33 @@ def main():
     except Exception as exc:
         say("FAIL", "React SPA served", str(exc)[:80], "run cd frontend && npm run build")
 
-    accounts = [("customer", "customer@routenex.in"), ("driver", "driver@routenex.in"),
-                ("dispatcher", "dispatcher@routenex.in"), ("admin", os.getenv("ADMIN_EMAIL", "samikhan@gmail.com"))]
     clients = {}
-    for role, email in accounts:
-        c = Client()
-        try:
-            pw = os.getenv("ADMIN_PASSWORD", "sami@123") if role == "admin" else "Demo@123"
-            user = c.login(email, pw)
-            clients[role] = c
-            say("OK", f"Login: {role}", user.get("user", {}).get("email", email))
-        except Exception as exc:
-            say("WARN" if role != "admin" else "FAIL", f"Login: {role}", str(exc)[:80],
-                "run python scripts/bootstrap.py --demo (development only)")
+    try:
+        config, _ = anon.call("/api/auth/config")
+        if not config.get("demo_mode"):
+            say("FAIL", "Demo configuration", "DEMO_MODE is off",
+                "use APP_ENV=development and DEMO_MODE=true for the public demo")
+        accounts = config.get("demo_accounts") or []
+        password = config.get("demo_password")
+        if not accounts or not password:
+            say("FAIL", "Demo accounts advertised", "no public demo credentials in /auth/config",
+                "deploy the unified demo-account build")
+        for account in accounts:
+            role, email = account["role"], account["email"]
+            c = Client()
+            try:
+                result = c.login(email, password)
+                user = result.get("user", {})
+                ok = user.get("email") == email and user.get("role") == role
+                say("OK" if ok else "FAIL", f"Login: {role}", user.get("email", email),
+                    "run python scripts/bootstrap.py --demo (development only)")
+                if ok:
+                    clients[role] = c
+            except Exception as exc:
+                say("FAIL", f"Login: {role}", str(exc)[:80],
+                    "set SEED_DEMO_DATA=true and redeploy, or run python scripts/bootstrap.py --demo")
+    except Exception as exc:
+        say("FAIL", "Demo configuration", str(exc)[:100], "check /api/auth/config")
 
     if "customer" in clients:
         c = clients["customer"]
@@ -101,12 +115,26 @@ def main():
         except Exception as exc:
             say("FAIL", "Customer flow", str(exc)[:100])
 
+    if "driver" in clients:
+        try:
+            d, _ = clients["driver"].call("/api/driver/me")
+            say("OK" if d.get("id") else "FAIL", "Driver workspace", f"driver profile #{d.get('id')}")
+        except Exception as exc:
+            say("FAIL", "Driver workspace", str(exc)[:100])
+
     if "dispatcher" in clients:
         try:
             s, _ = clients["dispatcher"].call("/api/optimizer/summary")
             say("OK", "Dispatch summary", f"{s.get('pending_orders', 0)} pending, {s.get('available_vehicles', 0)} vehicles")
         except Exception as exc:
             say("FAIL", "Operations flow", str(exc)[:100])
+
+    if "fleet_manager" in clients:
+        try:
+            vehicles, _ = clients["fleet_manager"].call("/api/vehicles")
+            say("OK" if vehicles else "WARN", "Fleet workspace", f"{len(vehicles)} vehicles")
+        except Exception as exc:
+            say("FAIL", "Fleet workspace", str(exc)[:100])
 
     if "admin" in clients:
         try:

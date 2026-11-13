@@ -49,7 +49,10 @@
 ## Configuration fail-closed
 Production/staging refuses to start unless: a 32+ char `SECRET_KEY`, HTTPS `BASE_URL`, all demo flags
 false, Razorpay provider + credentials, a real OTP provider, and a unique non-demo admin password are
-set. Demo seeding/autopilot are development-only.
+set. Demo seeding/autopilot are development-only. The login panel and `/auth/config` expose the
+reserved demo credentials only when `DEMO_MODE=true`; production/staging refuse that flag, and
+`scripts/bootstrap.py --demo` / `SEED_DEMO_DATA=true` refuse to seed unless `DEMO_MODE=true` and
+`APP_ENV` is development/test.
 
 ## Secrets handling
 `.env` is git-ignored and chmod 600 by the dev DB helper. Never commit real credentials; use

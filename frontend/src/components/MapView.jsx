@@ -9,8 +9,10 @@ function Fit({ points }) {
   const map = useMap();
   useEffect(() => {
     const valid = (points || []).filter(p => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
-    if (valid.length === 1) map.setView(valid[0], 14);
-    else if (valid.length > 1) map.fitBounds(valid, { padding: [35, 35], maxZoom: 14 });
+    // Deterministic, non-animated framing: closing a map modal mid-animation can leave a Leaflet
+    // position frame referencing a removed pane (_leaflet_pos). Demo/navigation flows unmount maps often.
+    if (valid.length === 1) map.setView(valid[0], 14, { animate: false });
+    else if (valid.length > 1) map.fitBounds(valid, { padding: [35, 35], maxZoom: 14, animate: false });
   }, [JSON.stringify(points), map]);
   return null;
 }

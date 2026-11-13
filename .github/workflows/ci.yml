@@ -79,8 +79,8 @@ jobs:
       LOCATION_PROVIDER: local
       ROUTING_URL: ""
       WEATHER_ENABLED: "false"
-      ADMIN_EMAIL: samikhan@gmail.com
-      ADMIN_PASSWORD: sami@123
+      ADMIN_EMAIL: samikhan@routenex.in
+      ADMIN_PASSWORD: Demo@123
       BASE_URL: http://127.0.0.1:8000
     steps:
       - uses: actions/checkout@v4
@@ -99,7 +99,8 @@ jobs:
       - name: Prepare demo database
         run: |
           alembic upgrade head
-          python scripts/bootstrap.py --demo
+          # No --demo flag: prove the container startup path honors SEED_DEMO_DATA=true.
+          python scripts/bootstrap.py
       - name: Build and unit-test frontend
         run: |
           cd frontend

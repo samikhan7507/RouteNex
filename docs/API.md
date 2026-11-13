@@ -9,7 +9,7 @@ with appropriate 4xx/5xx status and an `X-Request-ID` header.
 |---|---|---|
 | GET | `/health` | liveness + version |
 | GET | `/ready` | PostgreSQL + Alembic head readiness |
-| GET | `/auth/config` | demo mode, payment/location/OTP provider flags |
+| GET | `/auth/config` | demo mode, payment/location/OTP provider flags; public demo account emails/password only when demo mode is on |
 | POST | `/auth/register`, `/auth/login` | email/password; sets opaque session cookie |
 | POST | `/auth/otp/request`, `/auth/otp/verify` | phone OTP (demo phone in development) |
 | POST | `/auth/google` | optional Google Identity credential |

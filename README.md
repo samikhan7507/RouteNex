@@ -77,14 +77,19 @@ Open **http://localhost:8000**. For hot-reload frontend development run `npm run
 
 | Role | Email | Password |
 |---|---|---|
-| Admin | `samikhan@gmail.com` | `sami@123` |
+| Admin | `samikhan@routenex.in` | `Demo@123` |
 | Customer | `customer@routenex.in` | `Demo@123` |
 | Driver | `driver@routenex.in` | `Demo@123` |
 | Dispatcher | `dispatcher@routenex.in` | `Demo@123` |
 | Fleet manager | `fleet@routenex.in` | `Demo@123` |
 
-Demo phone OTP: `+919876543210` → code `123456`. Payments use the **demo** provider (simulate
-success/failure). These shortcuts are refused when `APP_ENV=production|staging`.
+All five accounts use the universal demo password `Demo@123`. The login page lists them and offers
+**Use** buttons that fill the form. Demo phone OTP: `+919876543210` → code `123456`. Payments use the
+**demo** provider (simulate success/failure). These shortcuts are refused when `APP_ENV=production|staging`.
+
+`SEED_DEMO_DATA=true` is honored by `scripts/bootstrap.py` at startup/container boot; `--demo` is the
+explicit one-shot equivalent. Seeding is idempotent, keeps operational rows, and reconciles the reserved
+demo identities above to the public demo password. It never runs in production/staging.
 
 ---
 
@@ -111,20 +116,48 @@ cp .env.example .env       # fill POSTGRES_PASSWORD, SECRET_KEY, BASE_URL, ADMIN
 docker compose up --build
 ```
 
-The image builds the SPA, runs `alembic upgrade head`, bootstraps **only the configured admin**
-(never demo data in production), then starts Uvicorn. A separate `worker` service runs background
-jobs. The compose file fails fast if required secrets are missing.
+The image builds the SPA, runs `alembic upgrade head`, runs `scripts/bootstrap.py`, then starts Uvicorn.
+Bootstrap ensures the configured admin and honors `SEED_DEMO_DATA`; production/staging refuse demo
+seeding. A separate `worker` service runs background jobs. The compose file fails fast if required
+secrets are missing.
 
-For a containerised *demo*, set `APP_ENV=development DEMO_MODE=true PAYMENT_PROVIDER=demo
-OTP_PROVIDER=console` in `.env` and run `python scripts/bootstrap.py --demo` against the compose DB.
+For a containerised *demo*, set `APP_ENV=development DEMO_MODE=true SEED_DEMO_DATA=true
+PAYMENT_PROVIDER=demo OTP_PROVIDER=console LOCATION_PROVIDER=local` in `.env`. The next container
+start seeds the demo accounts automatically; no shell command is required.
 
 ---
+
+## Render public demo
+
+Use the same public URL for mobile and laptop. In the Render web service environment set:
+
+```dotenv
+APP_ENV=development
+DEMO_MODE=true
+DEMO_AUTOPILOT=true
+SEED_DEMO_DATA=true
+PAYMENT_PROVIDER=demo
+OTP_PROVIDER=console
+LOCATION_PROVIDER=local
+ADMIN_NAME=Sami Khan
+ADMIN_EMAIL=samikhan@routenex.in
+ADMIN_PASSWORD=Demo@123
+BASE_URL=https://routenex.onrender.com
+TRUSTED_HOSTS=routenex.onrender.com,localhost,127.0.0.1
+CORS_ORIGINS=https://routenex.onrender.com
+```
+
+Also keep a 32+ character `SECRET_KEY` and the Render PostgreSQL `DATABASE_URL`. `TRUSTED_HOSTS`
+contains hostnames only — no `https://`. Save, then **Manual Deploy → Deploy latest commit** on the
+branch containing this fix. Startup runs migrations and seeds the five demo accounts automatically.
+Verify `/api/health`, then sign in with each row in the demo table above. This is a public demo
+configuration, not a production configuration; rotate any credentials previously exposed in screenshots.
 
 ## Tests & checks
 
 ```bash
-pytest -q                                   # 37 PostgreSQL-backed API/unit tests (uses routenex_test)
-ruff check backend/app scripts migrations ml backend/tests/v3
+pytest -q                                   # 46 PostgreSQL-backed API/unit tests (uses routenex_test)
+ruff check backend/app scripts migrations ml backend/tests/v3 tools
 cd frontend && npm test                     # Vitest unit tests
 cd frontend && npm run build                # production SPA build
 cd frontend && npm run test:e2e             # real Chromium E2E against a running demo API

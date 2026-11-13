@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.demo import DEMO_PASSWORD, public_demo_accounts
 from app.core.ratelimit import clear, consume
 from app.core.security import (create_session, current_session, current_user, hash_password, hash_secret,
                                login_event, otp_hash, public_user, verify_password)
@@ -27,7 +28,10 @@ def config():
     s = get_settings()
     return {"demo_mode": s.demo_mode, "payment_provider": s.payment_provider, "location_provider": s.location_provider,
             "google_enabled": bool(s.google_client_id), "otp_provider": s.otp_provider,
-            "demo_phone": DEMO_PHONE if s.demo_mode else None, "app_env": s.app_env}
+            "demo_phone": DEMO_PHONE if s.demo_mode else None,
+            "demo_accounts": public_demo_accounts() if s.demo_mode else [],
+            "demo_password": DEMO_PASSWORD if s.demo_mode else None,
+            "app_env": s.app_env}
 
 
 @router.post("/register", status_code=201)

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     demo_mode: bool = True
     demo_autopilot: bool = True
     admin_name: str = "Sami Khan"
-    admin_email: str = "samikhan@gmail.com"
+    admin_email: str = "samikhan@routenex.in"
     admin_password: str = ""
     seed_demo_data: bool = True
 

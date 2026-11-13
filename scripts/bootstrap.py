@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Idempotent bootstrap. NEVER deletes operational data.
 
-python scripts/bootstrap.py                  # admin only (production-safe)
+python scripts/bootstrap.py                  # admin only, unless SEED_DEMO_DATA=true
 python scripts/bootstrap.py --catalog        # admin + append-only starter catalogue
 python scripts/bootstrap.py --demo           # local/demo data; refuses production
 python scripts/bootstrap.py --rotate-admin-password  # explicit password rotation from ADMIN_PASSWORD
@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from sqlalchemy import func, select
 from app.core.config import get_settings
+from app.core.demo import DEMO_ACCOUNTS, DEMO_PASSWORD
 from app.core.security import hash_password, protect_code
 from app.db import session_scope
 from app.models import (Address, Alert, Coupon, Driver, DriverEarning, Order, OrderItem, Product, Trip, User, Vehicle, utcnow)
@@ -28,7 +29,7 @@ from app.services.pricing import IST
 def ensure_admin(db, rotate=False):
     s = get_settings()
     email = s.admin_email.lower()
-    password = s.admin_password or ("sami@123" if not s.is_production else "")
+    password = s.admin_password or (DEMO_PASSWORD if not s.is_production else "")
     if not password:
         raise SystemExit("ADMIN_PASSWORD is required")
     admin = db.scalar(select(User).where(User.email == email))
@@ -49,21 +50,35 @@ def seed_demo(db):
     s = get_settings()
     if s.is_production or not s.demo_mode:
         raise SystemExit("Demo seeding is refused outside an explicitly configured development/demo environment")
-    demo_hash = hash_password("Demo@123")
-    people = [("Aarav Sharma", "customer@routenex.in", "+919876543210", "customer"),
-              ("Diya Rathore", "driver@routenex.in", "+919000000002", "driver"),
-              ("Kabir Mehta", "dispatcher@routenex.in", "+919000000003", "dispatcher"),
-              ("Meera Joshi", "fleet@routenex.in", "+919000000004", "fleet_manager")]
+    demo_hash = hash_password(DEMO_PASSWORD)
+    people = [(str(a["name"]), str(a["email"]), a["phone"], str(a["role"])) for a in DEMO_ACCOUNTS]
     for i in range(2, 13):
         people.append((f"Driver {i:02d}", f"driver{i}@routenex.in", f"+9190000001{i:02d}", "driver"))
     users = {}
     for name, email, phone, role in people:
         user = db.scalar(select(User).where(User.email == email))
+        if not user and phone:
+            # A previous demo OTP sign-in may have created a phone-only row; attach the reserved email to it.
+            user = db.scalar(select(User).where(User.phone == phone))
+            if user and user.email and user.email != email:
+                user = None
         if not user:
-            user = User(name=name, email=email, phone=phone, password_hash=demo_hash, role=role,
+            safe_phone = phone
+            if phone and db.scalar(select(User.id).where(User.phone == phone)):
+                safe_phone = None  # never steal a phone belonging to a different account
+            user = User(name=name, email=email, phone=safe_phone, password_hash=demo_hash, role=role,
                         wallet_balance_paise=50000 if role == "customer" else 0)
             db.add(user)
             db.flush()
+        else:
+            # Reserved demo accounts are reconciled to the public demo credentials; operational rows are kept.
+            user.email = email
+            user.name = name
+            user.role = role
+            user.active = True
+            user.password_hash = demo_hash
+            if phone and user.phone != phone and not db.scalar(select(User.id).where(User.phone == phone, User.id != user.id)):
+                user.phone = phone
         users[email] = user
     customer = users["customer@routenex.in"]
     locations = [("C-Scheme", 26.9124, 75.7873, "302001"), ("Malviya Nagar", 26.8540, 75.8243, "302017"),
@@ -163,12 +178,13 @@ def main():
     parser.add_argument("--catalog", action="store_true")
     parser.add_argument("--rotate-admin-password", action="store_true")
     args = parser.parse_args()
+    demo_requested = args.demo or get_settings().seed_demo_data
     with session_scope() as db:
         ensure_admin(db, rotate=args.rotate_admin_password)
-        if args.catalog or args.demo:
+        if args.catalog or demo_requested:
             added = catalog.sync(db)
             print(f"Catalogue sync: {added} new products; existing products untouched")
-        if args.demo:
+        if demo_requested:
             seed_demo(db)
             print("Demo data ready. Existing operational rows were not deleted.")
     print("Bootstrap complete.")

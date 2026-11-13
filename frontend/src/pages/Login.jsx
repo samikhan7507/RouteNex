@@ -14,6 +14,12 @@ export default function Login() {
   const [busy, setBusy] = useState(false), [error, setError] = useState(null), [otpSent, setOtpSent] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const done = () => { toast('Welcome to RouteNex'); navigate('/'); };
+  const demoAccounts = config?.demo_accounts || [];
+  const demoPassword = config?.demo_password || '';
+  const useDemoAccount = email => {
+    setTab('password'); setMode('login'); setError(null);
+    setForm(f => ({ ...f, email, password: demoPassword }));
+  };
   const submit = async e => {
     e.preventDefault(); setBusy(true); setError(null);
     try {
@@ -52,7 +58,16 @@ export default function Login() {
         <ErrorBox error={error} />
         <Button type="submit" loading={busy} className="full">{tab === 'otp' ? (otpSent ? 'Verify and sign in' : 'Send verification code') : mode === 'register' ? 'Create account' : 'Sign in'}<ArrowRight size={17} /></Button>
         {tab === 'password' && <p className="switch-mode">{mode === 'register' ? 'Already have an account?' : 'New to RouteNex?'} <button type="button" className="text-btn" onClick={() => setMode(mode === 'register' ? 'login' : 'register')}>{mode === 'register' ? 'Sign in' : 'Create an account'}</button></p>}
-        {config?.demo_mode && <div className="demo-credentials"><strong>Demo accounts</strong><div><span>Admin</span><code>samikhan@gmail.com / sami@123</code></div><div><span>Customer</span><code>customer@routenex.in / Demo@123</code></div><div><span>Driver / Dispatcher / Fleet</span><code>driver@… / dispatcher@… / fleet@routenex.in · Demo@123</code></div><small>These credentials are for the local demo only and are disabled in production.</small></div>}
+        {config?.demo_mode && demoAccounts.length > 0 && <div className="demo-credentials">
+          <strong>Demo accounts</strong>
+          <div className="demo-password"><span>Universal password</span><code>{demoPassword}</code></div>
+          {demoAccounts.map(account => <div className="demo-account" key={account.email}>
+            <span>{account.label}</span>
+            <code>{account.email}</code>
+            <button type="button" className="text-btn" onClick={() => useDemoAccount(account.email)} aria-label={`Use ${account.label} demo account`}>Use</button>
+          </div>)}
+          <small>These credentials are for the demo environment only and are disabled in production.</small>
+        </div>}
       </form>
     </section>
   </div>;

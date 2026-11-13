@@ -40,7 +40,7 @@ def main():
         if env.exists():
             print("Existing .env left untouched")
         else:
-            env.write_text(f"APP_ENV=development\nDATABASE_URL={url}\nTEST_DATABASE_URL={test_url}\nDEMO_MODE=true\nDEMO_AUTOPILOT=true\nSEED_DEMO_DATA=true\nADMIN_EMAIL=samikhan@gmail.com\nADMIN_PASSWORD=sami@123\nPAYMENT_PROVIDER=demo\nOTP_PROVIDER=console\nLOCATION_PROVIDER=local\n", encoding="utf-8")
+            env.write_text(f"APP_ENV=development\nDATABASE_URL={url}\nTEST_DATABASE_URL={test_url}\nDEMO_MODE=true\nDEMO_AUTOPILOT=true\nSEED_DEMO_DATA=true\nADMIN_EMAIL=samikhan@routenex.in\nADMIN_PASSWORD=Demo@123\nPAYMENT_PROVIDER=demo\nOTP_PROVIDER=console\nLOCATION_PROVIDER=local\n", encoding="utf-8")
             env.chmod(0o600)
     print(f"DATABASE_URL={url}", flush=True)
     print(f"TEST_DATABASE_URL={test_url}", flush=True)

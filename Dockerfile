@@ -28,5 +28,5 @@ COPY --from=web /web/dist frontend/dist
 EXPOSE 8000
 HEALTHCHECK --interval=20s --timeout=5s --retries=5 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"
-# Migrations are explicit; bootstrap only ensures the configured admin (never seeds demo data in production).
+# Migrations are explicit; bootstrap ensures the configured admin and honors SEED_DEMO_DATA only outside production.
 CMD ["sh", "-c", "alembic upgrade head && python scripts/bootstrap.py && exec uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
