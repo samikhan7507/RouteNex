@@ -30,8 +30,9 @@ The v3 frontend is a light, accessible React SPA (React 19 + Vite) with a calm n
   token once before retrying.
 - Money is formatted with `money()` (en-IN); statuses are humanised with `titleCase()`.
 - Idempotency keys use `crypto.randomUUID()`.
-- Demo-only affordances (demo OTP notices, simulated payment buttons) render only when the API says
-  demo mode is enabled.
+- Demo-only affordances (demo OTP notices, simulated payment buttons, the login demo-account panel)
+  render only when the API says demo mode is enabled. The panel is driven by `/auth/config`, lists
+  every reserved role with the universal demo password, and provides accessible **Use** buttons.
 - The PWA service worker caches the shell/static assets only; API responses are never cached.
 
 ## Styling

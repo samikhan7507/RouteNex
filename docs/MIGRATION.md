@@ -8,7 +8,7 @@ the target must be a fresh PostgreSQL database already at Alembic head (`0002`).
 alembic upgrade head
 python scripts/migrate_sqlite.py --source /path/to/legacy-routenex.db --report migration.json
 python scripts/migrate_sqlite.py --source /path/to/legacy-routenex.db --apply --report migration.json
-python scripts/bootstrap.py        # ensures the configured admin; never deletes data
+python scripts/bootstrap.py        # ensures the configured admin; honors SEED_DEMO_DATA; never deletes data
 ```
 
 ## Table mapping

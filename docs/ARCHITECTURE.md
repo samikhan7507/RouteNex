@@ -48,5 +48,6 @@ candidates as live models.
 
 ## Data lifecycle
 Alembic is the only schema authority (`0001` → `0002`). The app refuses to start unless the database
-is at head. `scripts/bootstrap.py` is idempotent and append-only; it never deletes operational data.
+is at head. `scripts/bootstrap.py` is idempotent and never deletes operational data; it honors
+`SEED_DEMO_DATA` and reconciles reserved demo identities only in an explicit development/demo environment.
 `scripts/migrate_sqlite.py` imports v2 data transactionally into a fresh v3 database.
