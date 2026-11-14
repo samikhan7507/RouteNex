@@ -50,3 +50,10 @@ def test_catalogue_weight_reaches_the_order(client, auth, sql):
     r = client.post("/api/orders", headers=auth("c1@test.in"), json={"address_id": 1, "priority": 2, "delivery_window": "18:00-21:00", "items": [{"item_id": jar, "quantity": 2}]})
     assert r.status_code == 200, r.text
     assert sql("SELECT weight_kg FROM orders WHERE id=?", (r.json()["id"],))[0][0] == 42.0
+
+
+def test_catalog_sync_preserves_merchant_image(sql):
+    catalog.sync()
+    sql("UPDATE items SET image_url='/static/product-images/merchant.jpg' WHERE name='Ruled Notebook, A4 (200 pages)'")
+    catalog.sync()
+    assert sql("SELECT image_url FROM items WHERE name='Ruled Notebook, A4 (200 pages)'")[0][0] == '/static/product-images/merchant.jpg'

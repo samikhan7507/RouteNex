@@ -213,7 +213,7 @@ The importer preserves IDs and relationships and refuses a nonempty destination;
 
 ### Shop photos
 
-Items can optionally use a local photo: place a verified/licensed image in `frontend/product-images/` and set that item's `image_url` in PostgreSQL to `/static/product-images/filename.jpg` (PNG, JPEG, or WebP). Items without a photo retain their icon. No unverified product images are bundled yet; attaching 166 accurate photos requires a licensed image source.
+The shop includes 10 locally hosted AI-generated illustrative product images for demo catalogue items. These are labelled as illustrations, not photos of actual inventory. The remaining items display a "Photo coming soon" placeholder; a licensed source or merchant photographs are needed to cover the complete catalogue. To provide an actual photo, place a verified/licensed image in `frontend/product-images/` and set the item's `image_url` in the database to `/static/product-images/filename.jpg` (PNG, JPEG, or WebP). Supplied photos take precedence over the bundled demo images and survive catalogue sync. Missing or unavailable images fall back to the placeholder. Images are shipped with the application; adding files requires redeployment.
 
 ## 🗺️ Roadmap
 - Redis-backed rate limiting for multi-worker deployments

@@ -81,19 +81,17 @@ body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:contain}
 .shop-tools .toolbar{margin-bottom:12px;flex-wrap:wrap}.shop-tools .search{flex:1;max-width:460px}.shop-tools select{width:auto;min-width:190px}
 .filters button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
 .shopcard{padding-top:0}.shopcard h3{margin:0 0 6px;font-size:15.5px;line-height:1.3}.shopcard p{margin:0 0 4px;font-size:12.5px}
-.shop-banner{height:96px;margin:0 -20px 14px;padding:12px 16px;color:#fff;display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
-.shop-banner small{font-size:11px;font-weight:700;letter-spacing:.3px;background:#ffffff2e;padding:3px 9px;border-radius:12px;backdrop-filter:blur(2px)}.shop-emoji{font-size:42px;line-height:1;filter:drop-shadow(0 4px 8px #0003)}
+.shop-banner{height:180px;margin:0 -20px 16px;background:#f4f3f0;position:relative;overflow:hidden}
+.shop-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#777c8b;font-size:11px;font-weight:600;background:linear-gradient(145deg,#f5f4fa,#edecf3)}
+.shop-fallback svg{color:#a3a4b5}
+.shop-photo{width:100%;height:100%;position:absolute;inset:0;object-fit:cover}
+.shop-banner small,.shop-illustrative{position:absolute;z-index:1;font-size:10px;font-weight:700;line-height:1.3;padding:5px 9px;border-radius:20px;background:#ffffffed;color:#3b4255;box-shadow:0 2px 8px #10182812}
+.shop-banner small{left:10px;bottom:10px;max-width:75%}.shop-illustrative{right:10px;top:10px;color:#555068}
 .stock-low{color:#b25e00;font-weight:700}.stock-out{color:#c51f49;font-weight:700}
 .quantity button:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .cartbar{position:sticky;bottom:14px;z-index:6;margin:18px auto 0;max-width:560px;display:flex;align-items:center;justify-content:space-between;gap:14px;background:#101426;color:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 14px 34px #10182855}
 .cartbar button{background:var(--cyan);color:#05241f;white-space:nowrap}
 @media(max-width:590px){.shop-banner{margin:0 -14px 12px}.shop-tools select{width:100%}.cartbar{bottom:calc(14px + env(safe-area-inset-bottom))}}
-
-/* Optional locally hosted catalogue photos; products without one retain their icon. */
-.shop-banner { position: relative; overflow: hidden; }
-.shop-photo { width: 100%; height: 100%; position: absolute; inset: 0; object-fit: cover; }
-.shop-banner small { position: relative; z-index: 1; }
-
 
 /* Dashboard navigation and actions */
 #appSidebar { overflow: hidden; }
