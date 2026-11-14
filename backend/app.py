@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import time
 from db import init_db, one
-from routers import auth, shop, rides, fleet, ops, driver, wallet, ml, assistant
+from routers import auth, shop, rides, fleet, ops, driver, wallet, ml, assistant, geocoding
 from services.errors import ApiError
 from services.bootstrap import ensure_demo_data, ensure_admin, ensure_catalog
 from services import mlserve
@@ -78,7 +78,7 @@ def health():
     return {"status": "healthy", "service": "RouteNex", "db": db, "time": int(time.time())}
 
 
-for m in (auth, shop, rides, fleet, ops, driver, wallet, ml, assistant):
+for m in (auth, shop, rides, fleet, ops, driver, wallet, ml, assistant, geocoding):
     app.include_router(m.router)
 
 

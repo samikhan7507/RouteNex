@@ -148,3 +148,8 @@ body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:contain}
   .headActions .installBtn { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { #appSidebar { transition: none; } }
+
+/* India place autocomplete for ride and parcel pickup/drop. */
+.place-field{position:relative}.place-list{position:absolute;z-index:25;top:calc(100% + 4px);left:0;right:0;max-height:260px;overflow:auto;background:#fff;border:1px solid #d9dfeb;border-radius:10px;box-shadow:0 12px 28px #10182825}
+.place-option{cursor:pointer;padding:10px 12px;border-bottom:1px solid #eef0f5}.place-option:last-child{border:0}.place-option:hover,.place-option.active{background:#f2f1ff}.place-option strong,.place-option small{display:block;overflow-wrap:anywhere}.place-option strong{font-size:13px;color:#202b40}.place-option small{font-size:12px;color:#667085;margin-top:2px}
+.place-status{font-size:11px;color:#667085;line-height:1.4;margin-top:4px}.place-status:empty{display:none}.place-note{font-size:11px;line-height:1.45;color:#667085;margin:10px 0}.place-note a{color:#5146ca}.ride-map-card #bkMap:after{content:none}
