@@ -1,4 +1,5 @@
 import sqlite3
+import psycopg2
 from fastapi import APIRouter, Depends, HTTPException
 from db import rows, one, run, audit
 from deps import roles
@@ -20,7 +21,7 @@ def vehicle_add(x: VehicleIn, u=Depends(roles("fleet_manager", "admin"))):
     try:
         i = run("INSERT INTO vehicles(plate,type,capacity_kg,lat,lng,documents,next_maintenance,cost_per_km) VALUES(?,?,?,?,?,?,?,?)",
                 (x.plate.strip().upper(), x.type, x.capacity_kg, x.lat, x.lng, x.documents, x.next_maintenance, x.cost_per_km))
-    except sqlite3.IntegrityError:
+    except (sqlite3.IntegrityError, psycopg2.IntegrityError):
         raise HTTPException(409, "Vehicle plate exists")
     audit(u["id"], "CREATE", "vehicle", i)
     return one("SELECT * FROM vehicles WHERE id=?", (i,))
@@ -53,7 +54,7 @@ def driver_add(x: DriverIn, u=Depends(roles("fleet_manager", "admin"))):
     try:
         i = run("INSERT INTO drivers(user_id,license,vehicle_id,lat,lng,documents,capacity_rating) VALUES(?,?,?,?,?,?,5)",
                 (x.user_id, x.license, x.vehicle_id, x.lat, x.lng, x.documents))
-    except sqlite3.IntegrityError:
+    except (sqlite3.IntegrityError, psycopg2.IntegrityError):
         raise HTTPException(409, "Driver profile already exists for this user")
     audit(u["id"], "CREATE", "driver", i)
     return one("SELECT * FROM drivers WHERE id=?", (i,))

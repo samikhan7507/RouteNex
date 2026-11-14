@@ -4,6 +4,8 @@ import os, sys, sqlite3, subprocess, pathlib, argparse
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 import config
+if config.DATABASE_URL:
+    raise SystemExit('Demo reset is SQLite-only; refusing to alter a PostgreSQL database.')
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--name", default=os.getenv("ADMIN_NAME", "Sami Khan")); ap.add_argument("--email", default=os.getenv("ADMIN_EMAIL", "samikhan@routenex.in"))

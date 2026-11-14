@@ -16,6 +16,16 @@ def ensure_demo_data():
         return
     pw = hash_password("Demo@123")
     with tx() as c:
+        # Create missing demo identities, but never reset an existing account's
+        # password or reactivate it. Demo accounts only exist in DEMO_MODE.
+        for name, email, role in [("Demo Customer", "customer@routenex.in", "customer"),
+                                  ("Demo Driver", "driver@routenex.in", "driver"),
+                                  ("Demo Dispatcher", "dispatcher@routenex.in", "dispatcher"),
+                                  ("Demo Fleet", "fleet@routenex.in", "fleet_manager")]:
+            c.execute("INSERT OR IGNORE INTO users(name,email,password_hash,role) VALUES(?,?,?,?)",
+                      (name, email, pw, role))
+        c.execute("UPDATE users SET phone=? WHERE email='customer@routenex.in' AND role='customer' AND phone IS NULL AND NOT EXISTS (SELECT 1 FROM users WHERE phone=?)",
+                  (config.DEMO_PHONE, config.DEMO_PHONE))
         if not c.execute("SELECT 1 FROM meta WHERE key='demo_ride_fleet_v2'").fetchone():
             spec = [("Bike", "B", 120, 6, 4), ("Auto", "A", 280, 10, 4), ("Cab", "C", 450, 14, 4)]
             n = 0
@@ -35,6 +45,14 @@ def ensure_demo_data():
                                  VALUES(?,?,?,1,'available',?,?,?,?,'ride',1,40)""",
                               (uid, f"RJ14-2025-{n:04d}", round(4.3 + (n % 7) * 0.1, 1), lat, lng, "License OK, Police OK", vid))
             c.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('demo_ride_fleet_v2','1')")
+        # The advertised driver login must have a profile even on a fresh DB.
+        driver = c.execute("SELECT id FROM users WHERE email=? AND role='driver'", ("driver@routenex.in",)).fetchone()
+        if driver and not c.execute("SELECT 1 FROM drivers WHERE user_id=?", (driver["id"],)).fetchone():
+            c.execute("INSERT OR IGNORE INTO vehicles(plate,type,capacity_kg,available,status,lat,lng,cost_per_km) VALUES(?, 'Cab',450,1,'available',?,?,14)",
+                      ("RJ14-DEMO-01", *LOCS[0]))
+            vehicle = c.execute("SELECT id FROM vehicles WHERE plate=?", ("RJ14-DEMO-01",)).fetchone()
+            c.execute("INSERT OR IGNORE INTO drivers(user_id,license,vehicle_id,lat,lng,capacity_rating,service,online) VALUES(?,?,?,?,?,4.5,'both',1)",
+                      (driver["id"], "DEMO-DRIVER", vehicle["id"], *LOCS[0]))
         if not c.execute("SELECT 1 FROM meta WHERE key='demo_wallet_v2'").fetchone():
             for r in c.execute("SELECT id FROM users WHERE role='customer' AND wallet_balance=0").fetchall():
                 trips.wallet_credit(c, r["id"], 500.0, "topup", "Welcome credit (demo)")

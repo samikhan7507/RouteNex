@@ -5,6 +5,7 @@ services:
     environment:
       ROUTENEX_ENV: production
       ROUTENEX_SECRET: ${ROUTENEX_SECRET:?Set ROUTENEX_SECRET (32+ random characters)}
+      DATABASE_URL: ${DATABASE_URL:-}
       ROUTENEX_DB: /app/database/routenex.db
       DEMO_MODE: ${DEMO_MODE:-true}
       ADMIN_NAME: ${ADMIN_NAME:-Sami Khan}

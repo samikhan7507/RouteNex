@@ -1,8 +1,11 @@
 import sqlite3, contextlib
-from config import DB_PATH, ROOT
+from config import DB_PATH, ROOT, DATABASE_URL
 
 
 def _connect():
+    if DATABASE_URL:
+        from pgdb import Connection
+        return Connection(DATABASE_URL)
     c = sqlite3.connect(DB_PATH, timeout=15, check_same_thread=False)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys=ON")
@@ -64,7 +67,7 @@ MIGRATIONS = [
     ("users", "wallet_balance", "REAL DEFAULT 0"),
     ("orders", "discount", "REAL DEFAULT 0"), ("orders", "payment_method", "TEXT DEFAULT 'cod'"),
     ("orders", "payment_status", "TEXT DEFAULT 'pending'"), ("orders", "paid_amount", "REAL DEFAULT 0"), ("orders", "coupon", "TEXT"),
-    ("items", "weight_kg", "REAL"), ("orders", "weight_kg", "REAL"),
+    ("items", "image_url", "TEXT"), ("items", "weight_kg", "REAL"), ("orders", "weight_kg", "REAL"),
     ("routes", "load_kg", "REAL"), ("routes", "method", "TEXT"), ("routes", "saved_km", "REAL"), ("route_orders", "arrival_min", "INTEGER"), ("route_orders", "delay_risk", "REAL"),
 ]
 ITEM_WEIGHTS = {"Express Parcel": 2, "Same-Day Documents": 0.3, "Grocery Essentials Box": 8, "Pharmacy Express": 0.5, "Cold Chain Crate": 12,
@@ -80,9 +83,12 @@ DEFAULT_COUPONS = [  # code, title, scope, kind, value, max_discount, min_amount
 
 def migrate(c):
     for table, col, ddl in MIGRATIONS:
-        have = {r[1] for r in c.execute(f"PRAGMA table_info({table})")}
-        if col not in have:
-            c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+        if DATABASE_URL:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {ddl}")
+        else:
+            have = {r[1] for r in c.execute(f"PRAGMA table_info({table})")}
+            if col not in have:
+                c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
     c.execute("CREATE INDEX IF NOT EXISTS idx_rides_kind ON rides(kind, status)")
     try:
         from services.catalog import WEIGHTS as CATALOG_WEIGHTS
@@ -98,11 +104,24 @@ def migrate(c):
 
 def init_db():
     """Create tables/indexes if missing, then apply migrations (safe to run on every start)."""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not DATABASE_URL:
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     c = _connect()
     try:
-        c.execute("PRAGMA journal_mode=WAL")
-        c.executescript((ROOT / "database" / "schema.sql").read_text(encoding="utf-8"))
+        schema = (ROOT / "database" / "schema.sql").read_text(encoding="utf-8")
+        if DATABASE_URL:
+            # Serialize initialization across deploys/workers; no destructive reset.
+            c.execute("SELECT pg_advisory_xact_lock(73482911)")
+            schema = schema.replace("PRAGMA foreign_keys=ON;", "")
+            schema = schema.replace("id INTEGER PRIMARY KEY,", "id SERIAL PRIMARY KEY,")
+            # parcels.ride_id is a reference, not a generated id.
+            schema = schema.replace("ride_id SERIAL PRIMARY KEY", "ride_id INTEGER PRIMARY KEY")
+            for statement in schema.split(';'):
+                if statement.strip():
+                    c.execute(statement)
+        else:
+            c.execute("PRAGMA journal_mode=WAL")
+            c.executescript(schema)
         migrate(c)
         c.commit()
     finally:

@@ -24,3 +24,6 @@ ml/artifacts/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local test tools and caches
+.cache/

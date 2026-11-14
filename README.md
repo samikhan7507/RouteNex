@@ -10,7 +10,7 @@ Rides, parcels and a student shop on one platform, with a custom route optimizer
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776ab?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-WAL-003b57?logo=sqlite&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-persistent-4169e1?logo=postgresql&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-f7931e?logo=scikitlearn&logoColor=white)
 ![Leaflet](https://img.shields.io/badge/Leaflet-OpenStreetMap-199900?logo=leaflet&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-installable-5a0fc8?logo=pwa&logoColor=white)
@@ -89,7 +89,7 @@ flowchart LR
     SW["Service worker"]
   end
   UI -- "REST + signed token" --> API["FastAPI"]
-  API --> DB[("SQLite (WAL)")]
+  API --> DB[("PostgreSQL / local SQLite")]
   API --> VRP["Custom VRP solver"]
   API --> ML["scikit-learn models"]
   API --> AS["Assistant<br/>offline / Ollama / Gemini"]
@@ -131,7 +131,7 @@ Handy extras: `start-phone.bat` (public HTTPS link for testing on a phone via Cl
 python -m venv .venv && source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r backend/requirements-dev.txt
 cp backend/.env.example backend/.env                      # then edit it
-python database/seed.py --reset
+# Optional local demo history: python database/seed.py --reset  (deletes existing SQLite data)
 cd backend && uvicorn app:app --reload
 ```
 
@@ -157,6 +157,8 @@ The suite covers auth and rate limits, role permissions, ride and parcel lifecyc
 | Dispatcher | `dispatcher@routenex.in` | `Demo@123` |
 | Fleet manager | `fleet@routenex.in` | `Demo@123` |
 
+These accounts are created only when `DEMO_MODE=true`; existing passwords and disabled accounts are never reset on startup. The email is `customer@routenex.in`, not `cutomer@routenex.in`.
+
 The login screen also offers a **Google demo** profile and a **Mobile OTP** demo (number and code are pre-filled). The **admin** account is private: it is created from the `ADMIN_*` environment variables and is not part of the public demo.
 
 ## ⚙️ Configuration
@@ -167,7 +169,8 @@ All settings are environment variables (or `backend/.env`). The important ones:
 |---|---|
 | `ROUTENEX_ENV` | `development` (default) or `production` (requires a 32+ character secret) |
 | `ROUTENEX_SECRET` | signs login tokens. **Always set your own long random value** |
-| `ROUTENEX_DB` | SQLite file path |
+| `DATABASE_URL` | PostgreSQL connection string (takes precedence over SQLite) |
+| `ROUTENEX_DB` | Local SQLite file path when `DATABASE_URL` is unset |
 | `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | the owner/admin login, created or updated on every start |
 | `DEMO_MODE` | demo OTP, demo Google profile and demo fleet/wallet credit |
 | `DEMO_AUTOPILOT` | simulated drivers move and finish trips by themselves |
@@ -177,12 +180,34 @@ All settings are environment variables (or `backend/.env`). The important ones:
 
 ## ☁️ Deploying
 
-The repository includes a `Dockerfile` that seeds demo data on first start and listens on `$PORT`, so it works on Render, Railway, Fly.io or any Docker host. Set `ROUTENEX_SECRET` and the `ADMIN_*` variables in the host's environment settings and use `/api/health` as the health check.
+### Render + PostgreSQL
 
-> SQLite lives on the container's disk, so on free hosting tiers the data resets when the service restarts. For real use, move to PostgreSQL, Redis-backed rate limiting, a real SMS provider and verified Google sign-in.
+1. Create a Render Postgres database in the same region as the web service. Copy its **Internal Database URL** into the web service's `DATABASE_URL` environment variable; keep this URL secret. The service creates its tables on startup without deleting data. PostgreSQL is persistent, subject to the database plan and its retention/backup rules.
+2. Set `ROUTENEX_ENV=production` and `ROUTENEX_SECRET` to a stable random secret of at least 32 characters. Set `ADMIN_NAME`, `ADMIN_EMAIL`, and a strong private `ADMIN_PASSWORD`; these create the admin login. Use `/api/health` as the health check.
+3. To use the public demo accounts, set `DEMO_MODE=true` and optionally `DEMO_AUTOPILOT=true`. The shared demo password is public: **do not use these accounts for real customer data**. Turning demo mode off does not automatically delete or disable previously created demo accounts; deactivate them via the admin Users screen.
+4. Deploy this branch's changes. In the admin **Users & Audit** screen you can see users and successful login events as tables. Render's database tools, or a PostgreSQL client using the external URL and credentials, can also inspect `users`, `audit_logs`, `orders`, `rides` and other tables. Restrict this access: tables contain personal data and password hashes.
+
+If `DATABASE_URL` is not set, the app uses local SQLite. On Render's ephemeral filesystem that data can disappear on restart or redeploy. Changing databases does **not** automatically copy old SQLite records:
+
+#### Moving existing SQLite data
+
+Before switching production traffic, stop all writers and back up the SQLite file (including any WAL data: create a consistent backup using SQLite's backup API). Point `DATABASE_URL` to a **new, empty** PostgreSQL database and run from a trusted machine that can access it:
+
+```bash
+pip install -r backend/requirements.txt
+DATABASE_URL='postgresql://...' python database/migrate_to_postgres.py /path/to/backup.db
+```
+
+The importer preserves IDs and relationships and refuses a nonempty destination; it does not delete the source. Check row counts and logins before switching Render to the new database. A fresh Render database without an import starts empty except for catalog and demo accounts. If the old ephemeral SQLite file has already been lost, it cannot be recovered by this migration.
+
+**Production limitations:** OTP delivery is console-only, Google login is a fixed demo profile, there is no public email signup or verified Google/SMS authentication, and payments are simulated. Rate limits are in-memory and per process; keep one worker until a shared limiter is added. PostgreSQL persistence alone does not make this suitable for real customer data. The demo login will not overwrite an existing password. To deliberately restore the public customer password on an existing database, use a trusted shell connected to the same database with `DEMO_MODE=true` and run `python database/reset_demo_customer.py --confirm-public-password`. This will not reactivate a disabled account; reactivate it explicitly in the admin Users screen first. Never run this for real customer accounts.
+
+### Shop photos
+
+Items can optionally use a local photo: place a verified/licensed image in `frontend/product-images/` and set that item's `image_url` in PostgreSQL to `/static/product-images/filename.jpg` (PNG, JPEG, or WebP). Items without a photo retain their icon. No unverified product images are bundled yet; attaching 166 accurate photos requires a licensed image source.
 
 ## 🗺️ Roadmap
-- PostgreSQL and Redis for multi-worker deployments
+- Redis-backed rate limiting for multi-worker deployments
 - Real payment gateway and SMS provider adapters
 - GPS ingestion over WebSockets
 - Training the models on real trip data (`ml/data.py` has the hook)
