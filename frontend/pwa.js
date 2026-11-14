@@ -1,4 +1,4 @@
-/* PWA glue: service-worker registration, install button, offline banner, mobile logout. */
+/* PWA glue: service-worker registration, install button, offline banner. */
 (() => {
   const secure = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
   if ('serviceWorker' in navigator && secure) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
@@ -16,6 +16,4 @@
   const sync = () => bar && bar.classList.toggle('hidden', navigator.onLine);
   window.addEventListener('online', sync); window.addEventListener('offline', sync); sync();
 
-  const out = document.getElementById('logout2'), real = document.getElementById('logout');
-  if (out && real) out.addEventListener('click', () => real.click());
 })();

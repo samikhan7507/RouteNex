@@ -29,3 +29,13 @@ def test_page_has_csp_and_pwa_links():
 def test_app_js_has_no_inline_handlers_and_escapes_data():
     js = (ROOT / "frontend" / "app.js").read_text(encoding="utf-8")
     assert 'onclick="' not in js and "const esc=" in js
+
+
+def test_responsive_navigation_shell_is_accessible_and_cached():
+    html = client.get('/').text
+    assert 'id="navToggle"' in html and 'aria-controls="appSidebar"' in html
+    assert 'aria-expanded="false"' in html and 'aria-label="Close menu"' in html
+    assert 'aria-label="Refresh current page"' in html and 'aria-label="Sign out"' in html
+    assert html.index('/static/app.js') < html.index('/static/navigation.js')
+    assert client.get('/static/navigation.js').status_code == 200
+    assert '/static/navigation.js' in client.get('/sw.js').text
