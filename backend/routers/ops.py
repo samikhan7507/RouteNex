@@ -187,7 +187,7 @@ def notifications(u=Depends(current)):
 
 @router.get("/audit")
 def logs(u=Depends(roles("admin"))):
-    return rows("SELECT a.*,u.name FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 200")
+    return rows("SELECT a.*,u.name,u.role AS user_role,u.email AS user_email,u.phone AS user_phone FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 200")
 
 
 @router.get("/admin/users")

@@ -196,6 +196,28 @@ All settings are environment variables (or `backend/.env`). The important ones:
 3. To use the public demo accounts, set `DEMO_MODE=true` and optionally `DEMO_AUTOPILOT=true`. The shared demo password is public: **do not use these accounts for real customer data**. Turning demo mode off does not automatically delete or disable previously created demo accounts; deactivate them via the admin Users screen.
 4. Deploy this branch's changes. In the admin **Users & Audit** screen you can see users and successful login events as tables. Render's database tools, or a PostgreSQL client using the external URL and credentials, can also inspect `users`, `audit_logs`, `orders`, `rides` and other tables. Restrict this access: tables contain personal data and password hashes.
 
+#### Finding login records in Render Postgres
+
+Successful email/password, OTP, and Google **demo** sign-ins write `LOGIN` events to `audit_logs`. `audit_logs.user_id` links to `users.id`; the admin API joins the current user name and contact, not a historical snapshot. `ADMIN_SYNC` is a startup/admin configuration event, **not a login**. This history is not a list of users currently online: sign-outs, failed attempts and reuse of an existing session are not recorded as login events. The legacy local demo seeder can insert synthetic audit rows. The admin screen displays the latest 200 audit events and shows their times in IST; timestamps in the database remain UTC.
+
+To inspect the actual database, confirm the web service's `DATABASE_URL` points to the intended Render Postgres instance. In the Render dashboard open that Postgres instance, then **Connect** or **Info** and use the provided **PSQL Command** in a trusted terminal with PostgreSQL client tools installed. The external URL/command is for your own computer; a service in the same Render region uses the internal URL. Keep the URL, password, output and user data private. See [Render's connection guide](https://render.com/docs/postgresql-creating-connecting).
+
+Once connected, `\dt` lists tables and `\d audit_logs` shows columns. This read-only query shows recent login records in IST (the UTC session setting also makes imported timezone-less UTC strings unambiguous):
+
+```sql
+SET TIME ZONE 'UTC';
+SELECT a.id, u.id AS user_id, u.name, u.email, u.phone, u.role,
+       a.details AS login_method, a.created_at AS stored_utc,
+       a.created_at::timestamptz AT TIME ZONE 'Asia/Kolkata' AS login_time_ist
+FROM audit_logs AS a
+LEFT JOIN users AS u ON u.id = a.user_id
+WHERE a.action = 'LOGIN'
+ORDER BY a.id DESC
+LIMIT 100;
+```
+
+Exit with `\q`. If the table is empty or missing, confirm the connected database and the web service's `DATABASE_URL` before changing anything; a local/ephemeral SQLite database is separate. Don't run reset scripts on the live database. Existing records with no timezone suffix are interpreted as UTC, as produced by this application; records imported from a different local timezone need separate review.
+
 If `DATABASE_URL` is not set, the app uses local SQLite. On Render's ephemeral filesystem that data can disappear on restart or redeploy. Changing databases does **not** automatically copy old SQLite records:
 
 #### Moving existing SQLite data

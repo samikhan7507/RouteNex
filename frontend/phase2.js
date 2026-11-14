@@ -287,11 +287,24 @@ H['driver:trips'] = async c => {
   c.innerHTML = `<div class="card"><h3>Recent completed trips</h3>${e.recent.length ? `<div class="table-wrap"><table><thead><tr><th>#</th><th>Type</th><th>Route</th><th>Fare</th><th>You earned</th></tr></thead><tbody>${e.recent.map(r => `<tr><td>#${r.id}</td><td>${esc(r.kind)}</td><td>${esc(r.pickup)} → ${esc(r.dropoff)}</td><td>${money(r.fare)}</td><td><b>${money(r.earning)}</b></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No completed trips yet.</div>'}</div>`;
 };
 
+// Audit timestamps are stored in UTC. PostgreSQL text timestamps can end in
+// +00, while SQLite and older imports can have no suffix (also UTC).
+function auditTime(value) {
+  if (typeof value !== 'string') return 'Time unavailable';
+  let timestamp = value.trim().replace(' ', 'T');
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}(?::?\d{2})?)?$/i.test(timestamp)) return 'Time unavailable';
+  if (!/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(timestamp)) timestamp += 'Z';
+  else timestamp = timestamp.replace(/([+-]\d{2})$/, '$1:00').replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return 'Time unavailable';
+  return new Intl.DateTimeFormat('en-IN', {timeZone:'Asia/Kolkata', day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true}).format(date) + ' IST';
+}
+
 /* ---------- admin: users with activate / deactivate ---------- */
 H['admin:users'] = async c => {
   const [us, au] = await Promise.all([api('/admin/users'), api('/audit')]);
   c.innerHTML = `<div class="grid two"><div class="card"><h3>Users & roles</h3><div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Contact</th><th>Access</th></tr></thead><tbody>${us.map(u => `<tr><td>${esc(u.name)}</td><td>${pill(u.role)}</td><td>${esc(u.email || u.phone)}</td><td>${u.id === session.user.id ? '<small class="muted">You</small>' : `<button class="btn-sm ${u.active ? 'danger' : ''}" data-p2="utoggle" data-id="${u.id}" data-on="${u.active ? 0 : 1}">${u.active ? 'Deactivate' : 'Activate'}</button>`}</td></tr>`).join('')}</tbody></table></div></div>
-  <div class="card"><h3>Audit trail</h3>${au.map(x => `<p><b>${esc(x.action)}</b> ${esc(x.entity)} #${esc(x.entity_id)}<br><small class="muted">${esc(x.name || 'System')} · ${esc(x.created_at)}</small></p>`).join('')}</div></div>`;
+  <div class="card audit-trail"><h3>Audit trail</h3><p class="muted audit-note">Most recent 200 events · Times shown in Indian Standard Time (IST)</p>${au.length ? au.map(x => `<p class="audit-event"><b>${esc(x.action)}</b> ${esc(x.entity)} #${esc(x.entity_id)}<br><small class="muted audit-person">${esc(x.name || (x.user_id ? 'User #' + x.user_id : 'System'))}${x.user_role ? ' · ' + esc(x.user_role.replace(/_/g, ' ')) : ''}${x.user_email || x.user_phone ? ' · ' + esc(x.user_email || x.user_phone) : ''}</small><br><small class="muted audit-time">${esc(auditTime(x.created_at))}</small></p>`).join('') : '<p class="muted">No audit events yet.</p>'}</div></div>`;
 };
 A.utoggle = async b => { await api(`/admin/users/${b.dataset.id}/active`, { method: 'PATCH', body: JSON.stringify({ active: b.dataset.on === '1' }) }); toast('Access updated'); navigate('users'); };
 
