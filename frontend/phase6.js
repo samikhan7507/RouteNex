@@ -41,7 +41,7 @@ window.changeCart = (id, d) => {                       // replaces the old handl
 
 function card(x) {
   const [a, b] = LOOK[x.category] || FALLBACK, q = cart[x.id] || 0, out = x.stock <= 0;
-  return `<div class="card item shopcard"><div class="shop-banner" style="background:linear-gradient(135deg,${a},${b})"><span class="shop-emoji">${esc(x.icon)}</span><small>${esc(x.category)}</small></div>
+  return `<div class="card item shopcard"><div class="shop-banner" style="background:linear-gradient(135deg,${a},${b})">${x.image_url && /^\/static\/product-images\/[a-zA-Z0-9._-]+$/.test(x.image_url) ? `<img class="shop-photo" src="${esc(x.image_url)}" alt="${esc(x.name)}" loading="lazy">` : `<span class="shop-emoji">${esc(x.icon)}</span>`}<small>${esc(x.category)}</small></div>
   <h3>${esc(x.name)}</h3><p class="muted">${esc(x.description)}</p>
   <div class="price">${money(x.price)}</div>
   <div class="quantity"><button data-act="changeCart" data-id="${x.id}" data-d="-1" aria-label="Remove one">−</button><b id="q${x.id}">${q}</b><button data-act="changeCart" data-id="${x.id}" data-d="1" aria-label="Add one" ${out ? 'disabled' : ''}>+</button>

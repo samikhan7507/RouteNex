@@ -1,5 +1,6 @@
 """Trip engine shared by rides and parcels: matching, payments, coupons, cancel/complete, demo autopilot, live position."""
-import math, time, secrets, calendar
+import math, time, secrets
+from datetime import datetime, timezone
 import config
 from services.errors import ApiError
 from services.geo import haversine_km
@@ -198,7 +199,8 @@ def cancel_trip(c, r, by, reason):
 
 def _created_epoch(r):
     try:
-        return calendar.timegm(time.strptime(r["created_at"], "%Y-%m-%d %H:%M:%S"))
+        value = datetime.fromisoformat(r["created_at"])
+        return int(value.replace(tzinfo=timezone.utc).timestamp() if value.tzinfo is None else value.timestamp())
     except Exception:
         return now_s()
 
@@ -324,7 +326,7 @@ def snapshot(c, r, viewer):
                    "lat": pos[0] if pos else None, "lng": pos[1] if pos else None, "heading": pos[2] if pos else 0}
     owner = viewer["role"] == "customer" and viewer["id"] == r["user_id"]
     parcel = c.execute("SELECT * FROM parcels WHERE ride_id=?", (r["id"],)).fetchone() if r["kind"] == "parcel" else None
-    timeline = [{"status": "booked", "at": calendar.timegm(time.strptime(r["created_at"], "%Y-%m-%d %H:%M:%S")) if r["created_at"] else None}]
+    timeline = [{"status": "booked", "at": _created_epoch(r) if r["created_at"] else None}]
     for key, label in (("matched_at", "matched"), ("arrived_at", "arriving"), ("started_at", "started"), ("completed_at", "completed")):
         if r[key]:
             timeline.append({"status": label, "at": r[key]})

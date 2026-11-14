@@ -66,6 +66,7 @@ def otp_verify(x: OtpVerify):
         u = one("SELECT * FROM users WHERE id=?", (uid,))
     if not u["active"]:
         raise HTTPException(401, "Inactive account")
+    audit(u["id"], "LOGIN", "user", u["id"], "OTP")
     return _session(u)
 
 
@@ -80,6 +81,9 @@ def google(body: GoogleIn):
     if not u:
         uid = run("INSERT INTO users(name,email,role) VALUES(?,?,?)", ("Google Demo User", email, "customer"))
         u = one("SELECT * FROM users WHERE id=?", (uid,))
+    if not u["active"]:
+        raise HTTPException(401, "Inactive account")
+    audit(u["id"], "LOGIN", "user", u["id"], "Google demo")
     return _session(u)
 
 

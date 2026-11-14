@@ -54,3 +54,11 @@ if _raw_db:
     DB_PATH = (_p if _p.is_absolute() else BASE / _p).resolve()
 else:
     DB_PATH = ROOT / "database" / "routenex.db"
+
+# Render supplies its internal PostgreSQL URL as DATABASE_URL. SQLite remains
+# available for local development when no URL is configured.
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
+if DATABASE_URL and not DATABASE_URL.startswith("postgresql://"):
+    raise RuntimeError("DATABASE_URL must be a PostgreSQL URL")

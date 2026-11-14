@@ -3,6 +3,9 @@ import sqlite3, pathlib, sys, random, json, datetime, os, secrets
 sys.path.insert(0,str(pathlib.Path(__file__).parents[1]/'backend'))
 from security import hash_password
 from config import DB_PATH            # same database file the app uses (honours ROUTENEX_DB and backend/.env)
+from config import DATABASE_URL
+if DATABASE_URL:
+    raise SystemExit('This legacy demo seeder is SQLite-only. PostgreSQL initializes on app startup; never reset a live database.')
 root=pathlib.Path(__file__).parent; db=DB_PATH; random.seed(42)
 ADMIN_EMAIL=(os.getenv('ADMIN_EMAIL') or 'samikhan@routenex.in').strip().lower(); ADMIN_NAME=(os.getenv('ADMIN_NAME') or 'Sami Khan').strip()
 c=sqlite3.connect(db); c.execute('PRAGMA foreign_keys=ON'); c.executescript((root/'schema.sql').read_text())
