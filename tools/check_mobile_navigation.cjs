@@ -75,7 +75,7 @@ async function checkControlSizes(page, sidebarVisible) {
  await page.evaluate(async () => {
    const reg = await navigator.serviceWorker.ready;
    await new Promise(resolve => { if (reg.active) resolve(); else reg.addEventListener('updatefound', resolve, {once:true}); });
-   const cache = await caches.open('routenex-shell-v14');
+   const cache = await caches.open('routenex-shell-v15');
    await cache.put('/static/styles.css', new Response('svg { width: 250px; height: 250px; }', {headers:{'Content-Type':'text/css'}}));
  });
  await page.context().setOffline(true); await page.reload({waitUntil:'domcontentloaded'});
