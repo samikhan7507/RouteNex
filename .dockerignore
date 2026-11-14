@@ -1,39 +1,11 @@
-# Repository metadata, credentials and local state never belong in an image context.
 .git
-.github
-.env
-.env.*
-**/.env
-**/.env.*
-.local
 .venv
-**/.venv
-image-search
-
-# Dependencies and reproducible build/test output.
-**/node_modules
-**/dist
-**/__pycache__
-**/*.py[cod]
+__pycache__
+*.pyc
 .pytest_cache
-.ruff_cache
-.mypy_cache
-coverage
-htmlcov
-.coverage
-frontend/test-results
-*.log
-*.db
-*.db-shm
-*.db-wal
-*.sqlite*
-ml/artifacts
-
-# Not needed by the runtime image or SPA build.
-backend/tests
-frontend/tests
-database
-docs
-tools
-*.bat
-*.ps1
+.env
+backend/.env
+database/*.db
+database/*.db-shm
+database/*.db-wal
+node_modules

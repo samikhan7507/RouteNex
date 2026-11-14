@@ -2,44 +2,25 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.ruff_cache/
-.mypy_cache/
 .venv/
 venv/
-.coverage
-coverage/
-htmlcov/
-
-# Node / build output
-node_modules/
-frontend/dist/
-frontend/test-results/
-*.tsbuildinfo
 
 # Secrets and environment variables
 .env
 .env.*
 !.env.example
 
-# Local databases, embedded Postgres and backups
+# Local databases and backups
 *.db
 *.sqlite
 *.sqlite3
 *.db-journal
-*.db-wal
-*.db-shm
-.local/
-*.tar
 
-# Generated ML artifacts / reports are promoted explicitly, not committed blindly
-ml/artifacts/
-
-# Scratch image research and logs
-image-search/
+# Logs and generated files
 *.log
+ml/artifacts/
 
 # OS and editor files
 .DS_Store
 Thumbs.db
 .vscode/
-.idea/

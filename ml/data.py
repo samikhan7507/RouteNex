@@ -1,5 +1,6 @@
 """SYNTHETIC but realistic Jaipur data generators (there is no public per-trip dataset). The 'truth' functions below are the world the
 models must learn; noise is added so the task is not trivial. In production, replace these with real trip / GPS logs (see load_real)."""
+import math
 import numpy as np
 from ml import features as F
 

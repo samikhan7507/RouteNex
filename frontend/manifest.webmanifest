@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "RouteNex - Logistics & Ride Hub",
+  "short_name": "RouteNex",
+  "description": "Dynamic routing for rides, parcels and fleet operations in Jaipur",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#101426",
+  "theme_color": "#5548e7",
+  "categories": ["business", "navigation", "productivity"],
+  "icons": [
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
