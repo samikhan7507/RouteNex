@@ -148,6 +148,10 @@ pytest
 ```
 The suite covers auth and rate limits, role permissions, ride and parcel lifecycles, wallet and coupons, the optimizer and ML pipeline, the assistant, the PWA files and the shop catalogue.
 
+### Installed app updates
+
+App shell assets use a shared revision in `frontend/index.html` and `frontend/sw.js`. When changing the shell, bump both the asset query revision and the service worker `VERSION`, and update its precache list so installed apps get matching HTML, CSS and JavaScript. The PWA tests check these URLs and their cache headers. After deploying, open or reload the installed app while online to pick up the update.
+
 ### Mobile navigation browser check
 
 With a **disposable demo database**, start the app with `DEMO_MODE=true`, `ADMIN_EMAIL=admin@test.in` and `ADMIN_PASSWORD=owner-pass-123`. Then install `playwright-core` locally (`npm install --no-save --no-package-lock playwright-core`) and run `node tools/check_mobile_navigation.cjs` with a locally installed Playwright Chromium. Set `CHROMIUM_PATH` if using a different Chromium executable, `ROUTENEX_BASE_URL` if the app is not on port 8000, and `TEST_ADMIN_EMAIL` / `TEST_ADMIN_PASSWORD` for different test admin credentials. This logs in as each demo role, so do not run it against a production database.

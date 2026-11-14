@@ -39,3 +39,43 @@ def test_responsive_navigation_shell_is_accessible_and_cached():
     assert html.index('/static/app.js') < html.index('/static/navigation.js')
     assert client.get('/static/navigation.js').status_code == 200
     assert '/static/navigation.js' in client.get('/sw.js').text
+
+
+def test_versioned_assets_are_precached_and_revalidated():
+    from html.parser import HTMLParser
+    from urllib.parse import urlsplit
+
+    class Assets(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.paths = []
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            path = attrs.get('href') if tag == 'link' else attrs.get('src') if tag == 'script' else None
+            if path and path.startswith('/static/') and urlsplit(path).path.endswith(('.css', '.js')):
+                self.paths.append(path)
+
+    parser = Assets()
+    parser.feed(client.get('/').text)
+    worker = client.get('/sw.js').text
+    assert parser.paths
+    for path in parser.paths:
+        assert urlsplit(path).query, f'{path} needs a cache-busting revision'
+        assert path in worker, f'{path} must be available in the offline app shell'
+        assert client.get(path).headers['cache-control'] == 'no-cache'
+
+
+def test_shell_icons_have_safe_intrinsic_sizes():
+    from html.parser import HTMLParser
+
+    class Icons(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.icons = []
+        def handle_starttag(self, tag, attrs):
+            if tag == 'svg':
+                self.icons.append(dict(attrs))
+
+    parser = Icons()
+    parser.feed(client.get('/').text)
+    assert parser.icons and all(icon.get('width') == '20' and icon.get('height') == '20' for icon in parser.icons)

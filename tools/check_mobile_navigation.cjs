@@ -3,6 +3,16 @@ const assert = require('assert');
 const base = process.env.ROUTENEX_BASE_URL || 'http://127.0.0.1:8000';
 const adminEmail = process.env.TEST_ADMIN_EMAIL || 'admin@test.in';
 const adminPassword = process.env.TEST_ADMIN_PASSWORD || 'owner-pass-123';
+async function checkControlSizes(page, sidebarVisible) {
+  for (const selector of ['#refresh', '#logout2', ...(sidebarVisible ? ['#logout'] : [])]) {
+    const button = page.locator(selector);
+    const box = await button.boundingBox();
+    const icon = await button.locator('svg').boundingBox();
+    assert(box && box.height >= 40 && box.height <= 56, `${selector} height: ${box && box.height}`);
+    assert(icon && icon.width <= 22 && icon.height <= 22, `${selector} icon: ${JSON.stringify(icon)}`);
+  }
+}
+
 (async () => {
  const browser = await chromium.launch({executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--no-sandbox', '--disable-dev-shm-usage'], headless:true});
  const roles = ['customer@routenex.in','driver@routenex.in','dispatcher@routenex.in','fleet@routenex.in',adminEmail];
@@ -14,6 +24,7 @@ const adminPassword = process.env.TEST_ADMIN_PASSWORD || 'owner-pass-123';
   await page.locator('#loginForm button').click(); await page.locator('#app:not(.hidden)').waitFor();
   await page.waitForTimeout(500);
   assert(await page.locator('#navToggle').isVisible()); assert(!(await page.locator('#appSidebar').isVisible()));
+  await checkControlSizes(page, false);
   await page.locator('#navToggle').click();
   assert.equal(await page.locator('#navToggle').getAttribute('aria-expanded'),'true');
   await page.locator('#appSidebar').waitFor({state:'visible'}); await page.waitForFunction(() => document.activeElement.id === 'navClose');
@@ -32,6 +43,9 @@ const adminPassword = process.env.TEST_ADMIN_PASSWORD || 'owner-pass-123';
   assert.equal(await page.locator('#navToggle').getAttribute('aria-expanded'),'false');
   let width=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,client:document.documentElement.clientWidth}));
   assert(width.scroll<=width.client,JSON.stringify(width));
+  await page.setViewportSize({width:1440,height:900});
+  assert(await page.locator('#appSidebar').isVisible()); await checkControlSizes(page, true);
+  await page.setViewportSize({width:390,height:844});
   if (email === adminEmail) { await page.locator('#navToggle').click(); await page.locator('#logout').click(); }
   else await page.locator('#logout2').click();
   assert(await page.locator('#auth').isVisible());
@@ -49,5 +63,16 @@ const adminPassword = process.env.TEST_ADMIN_PASSWORD || 'owner-pass-123';
  await page.setViewportSize({width:600,height:844}); assert(await page.locator('#navToggle').isVisible());
  await page.locator('#navToggle').click(); await page.setViewportSize({width:1440,height:900});
  assert(await page.locator('#appSidebar').isVisible()); assert.equal(await page.locator('#appMain').evaluate(el=>el.inert),false);
- console.log('desktop and resize: OK'); await browser.close();
+ await page.setViewportSize({width:1440,height:900}); await checkControlSizes(page, true);
+ // Seed a stale unversioned stylesheet as if an earlier installed app had cached it.
+ // The current versioned app shell must still render correctly after going offline.
+ await page.evaluate(async () => {
+   const reg = await navigator.serviceWorker.ready;
+   await new Promise(resolve => { if (reg.active) resolve(); else reg.addEventListener('updatefound', resolve, {once:true}); });
+   const cache = await caches.open('routenex-shell-v11');
+   await cache.put('/static/styles.css', new Response('svg { width: 250px; height: 250px; }', {headers:{'Content-Type':'text/css'}}));
+ });
+ await page.context().setOffline(true); await page.reload({waitUntil:'domcontentloaded'});
+ await page.locator('#app:not(.hidden)').waitFor(); await checkControlSizes(page, true);
+ console.log('desktop, resize and stale-cache offline shell: OK'); await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

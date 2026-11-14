@@ -48,6 +48,9 @@ async def security_headers(request: Request, call_next):
     path = request.url.path
     if path.startswith("/api"):
         r.headers.setdefault("Cache-Control", "no-store")
+    elif path.startswith("/static/") and path.endswith((".css", ".js")):
+        # Revalidate code/style responses so installed apps do not mix releases.
+        r.headers.setdefault("Cache-Control", "no-cache")
     if not path.startswith(("/docs", "/redoc", "/openapi")):   # Swagger UI needs its own CDN scripts
         r.headers.setdefault("Content-Security-Policy", CSP)
     return r
