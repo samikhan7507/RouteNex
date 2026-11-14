@@ -2,9 +2,9 @@
    - App shell: network-first (updates apply immediately), cache fallback when offline.
    - Leaflet + map tiles: cache-first (so a visited map still draws offline).
    - /api/*: NEVER cached (authenticated, live data). Offline -> clean JSON error. */
-const VERSION = 'v12';
+const VERSION = 'v13';
 const SHELL = `routenex-shell-${VERSION}`, MAPS = `routenex-maps-${VERSION}`;
-const PRECACHE = ['/', '/static/styles.css?v=12', '/static/app.js?v=12', '/static/navigation.js?v=12', '/static/pwa.js?v=12', '/static/phase2.js?v=12', '/static/phase3.js?v=12', '/static/phase4.js?v=12', '/static/phase5.js?v=12', '/static/phase6.js?v=12', '/manifest.webmanifest',
+const PRECACHE = ['/', '/static/styles.css?v=13', '/static/app.js?v=13', '/static/navigation.js?v=13', '/static/pwa.js?v=13', '/static/phase2.js?v=13', '/static/phase3.js?v=13', '/static/phase4.js?v=13', '/static/phase5.js?v=13', '/static/phase6.js?v=13', '/manifest.webmanifest',
   '/static/icons/icon-192.png', '/static/icons/icon-512.png'];
 const MAP_HOSTS = ['unpkg.com', 'tile.openstreetmap.org'];
 const MAX_MAP_ENTRIES = 250;

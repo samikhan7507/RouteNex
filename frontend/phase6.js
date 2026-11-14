@@ -1,10 +1,26 @@
 /* RouteNex Phase 6 UI: the student-friendly shop (search, categories, sorting, quantity limits and a live cart bar). */
 (() => {
-const LOOK = { 'Stationery': ['#6366f1', '#8b5cf6'], 'Books & Exam Prep': ['#0ea5e9', '#2563eb'], 'Electronics & Accessories': ['#0f766e', '#14b8a6'], 'Engineering & Lab': ['#9333ea', '#c026d3'],
-  'Hostel & Room': ['#f97316', '#f59e0b'], 'Kitchen & Mess': ['#dc2626', '#f97316'], 'Groceries': ['#16a34a', '#65a30d'], 'Snacks & Drinks': ['#e11d48', '#fb7185'],
-  'Personal Care & Health': ['#0891b2', '#06b6d4'], 'Cleaning & Laundry': ['#2563eb', '#38bdf8'], 'Bags & Travel': ['#7c3aed', '#a78bfa'], 'Art & Craft': ['#db2777', '#f472b6'],
-  'Sports & Fitness': ['#ea580c', '#facc15'], 'Print & Copy': ['#475569', '#64748b'] };
-const FALLBACK = ['#5548e7', '#786cff'], MAX_PER_ITEM = 50;
+// Illustrative demo images are keyed by catalogue name, not database IDs, so existing
+// installations need no migration. A valid merchant-supplied image always wins.
+const DEMO_IMAGES = Object.freeze({
+  'Ruled Notebook, A4 (200 pages)': 'ruled-notebook.jpg',
+  'Notebook Pack, Single Line (set of 6)': 'notebook-pack.jpg',
+  'Spiral Notebook, 5 Subject (300 pages)': 'spiral-notebook.jpg',
+  'Ball Pens, Blue (pack of 10)': 'blue-ball-pens.jpg',
+  'Gel Pens, Assorted (pack of 12)': 'gel-pens.jpg',
+  'Pencils HB with Eraser & Sharpener (set of 10)': 'pencils-set.jpg',
+  'Geometry Box (full set)': 'geometry-box.jpg',
+  'Highlighters (pack of 5)': 'highlighters.jpg',
+  'Class 10 CBSE Sample Papers': 'cbse-papers.jpg',
+  'Class 12 Physics Practice Workbook': 'physics-workbook.jpg'
+});
+const MAX_PER_ITEM = 50;
+const localImage = url => typeof url === 'string' && /^\/static\/product-images\/[a-zA-Z0-9._-]+$/.test(url);
+function imageFor(x) {
+  if (localImage(x.image_url)) return { url: x.image_url, illustrative: false };
+  const filename = Object.prototype.hasOwnProperty.call(DEMO_IMAGES, x.name) ? DEMO_IMAGES[x.name] : null;
+  return filename ? { url: '/static/product-images/' + filename, illustrative: true } : null;
+}
 const SORTS = { featured: 'Featured', low: 'Price: low to high', high: 'Price: high to low', az: 'Name: A to Z' };
 let all = [], view = { q: '', cat: 'All', sort: 'featured' };
 
@@ -40,11 +56,13 @@ window.changeCart = (id, d) => {                       // replaces the old handl
 };
 
 function card(x) {
-  const [a, b] = LOOK[x.category] || FALLBACK, q = cart[x.id] || 0, out = x.stock <= 0;
-  return `<div class="card item shopcard"><div class="shop-banner" style="background:linear-gradient(135deg,${a},${b})">${x.image_url && /^\/static\/product-images\/[a-zA-Z0-9._-]+$/.test(x.image_url) ? `<img class="shop-photo" src="${esc(x.image_url)}" alt="${esc(x.name)}" loading="lazy">` : `<span class="shop-emoji">${esc(x.icon)}</span>`}<small>${esc(x.category)}</small></div>
+  const image = imageFor(x), q = cart[x.id] || 0, out = x.stock <= 0;
+  return `<div class="card item shopcard"><div class="shop-banner">
+  <div class="shop-fallback" ${image ? 'aria-hidden="true"' : ''}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9" r="1.5"/><path d="m4 18 5-5 3 3 3-3 5 5"/></svg><span>Photo coming soon</span></div>
+  ${image ? `<img class="shop-photo" src="${esc(image.url)}" alt="" loading="lazy" decoding="async">${image.illustrative ? '<span class="shop-illustrative">AI illustration</span>' : ''}` : ''}<small>${esc(x.category)}</small></div>
   <h3>${esc(x.name)}</h3><p class="muted">${esc(x.description)}</p>
   <div class="price">${money(x.price)}</div>
-  <div class="quantity"><button data-act="changeCart" data-id="${x.id}" data-d="-1" aria-label="Remove one">−</button><b id="q${x.id}">${q}</b><button data-act="changeCart" data-id="${x.id}" data-d="1" aria-label="Add one" ${out ? 'disabled' : ''}>+</button>
+  <div class="quantity"><button data-act="changeCart" data-id="${x.id}" data-d="-1" aria-label="Remove one ${esc(x.name)}">−</button><b id="q${x.id}">${q}</b><button data-act="changeCart" data-id="${x.id}" data-d="1" aria-label="Add one ${esc(x.name)}" ${out ? 'disabled' : ''}>+</button>
   ${out ? '<small class="stock-out">Out of stock</small>' : x.stock <= 5 ? `<small class="stock-low">Only ${x.stock} left</small>` : `<small class="muted">${x.stock} available</small>`}</div></div>`;
 }
 function paintGrid() {
@@ -60,6 +78,14 @@ async function shopPage(c) {
     <select id="shopSort" aria-label="Sort items">${Object.entries(SORTS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select><span id="shopCount" class="pill"></span></div>
     <div id="shopChips" class="filters"><button data-cat="All" class="on">All</button>${cats.map(k => `<button data-cat="${esc(k)}">${esc(k)}</button>`).join('')}</div></div>
     <div id="shopGrid" class="grid items" style="margin-top:18px"></div><div id="cartBar" class="cartbar hidden"></div>`;
+  // Image errors do not bubble. Capture them so an unavailable merchant photo
+  // reveals the accessible, styled fallback rather than a broken-image icon.
+  $('#shopGrid').addEventListener('error', e => {
+    if (!e.target.classList.contains('shop-photo')) return;
+    const banner = e.target.closest('.shop-banner');
+    e.target.remove(); banner.querySelector('.shop-illustrative')?.remove();
+    banner.querySelector('.shop-fallback').removeAttribute('aria-hidden');
+  }, true);
   $('#shopQ').oninput = e => { view.q = e.target.value; paintGrid(); };
   $('#shopSort').onchange = e => { view.sort = e.target.value; paintGrid(); };
   $('#shopChips').onclick = e => { const b = e.target.closest('button[data-cat]'); if (!b) return; view.cat = b.dataset.cat; paintGrid(); };
@@ -78,5 +104,5 @@ render = async function () {
   if (role === 'customer' && page === 'cart') { try { await pruneCart(); } catch (e) {} }
   return _r();
 };
-window.__rnShop = { filterItems };
+window.__rnShop = { filterItems, imageFor };
 })();
