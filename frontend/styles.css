@@ -123,7 +123,6 @@ body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:contain}
 .headActions { flex-shrink: 0; }
 .headActions .shell-action, .header-heading .shell-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 13px; border: 1px solid #dfe4ee; border-radius: 11px; background: #fff; color: #344054; font-size: 13px; font-weight: 650; box-shadow: 0 2px 5px #10182808; }
 .headActions .shell-action:hover, .header-heading .shell-action:hover { background: #f7f7ff; border-color: #c9c6f2; color: #4a3fd1; transform: none; }
-.headActions .signout-action:hover { background: #fff5f6; border-color: #f1d4da; color: #b4233b; }
 .header-heading .menu-toggle { display: none; }
 .shell-action:focus-visible, .sidebar-logout:focus-visible, .nav-close:focus-visible, #nav button:focus-visible { outline: 3px solid #9d95ff; outline-offset: 2px; }
 @media (max-width: 860px) {

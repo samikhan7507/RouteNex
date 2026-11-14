@@ -4,7 +4,7 @@ const base = process.env.ROUTENEX_BASE_URL || 'http://127.0.0.1:8000';
 const adminEmail = process.env.TEST_ADMIN_EMAIL || 'admin@test.in';
 const adminPassword = process.env.TEST_ADMIN_PASSWORD || 'owner-pass-123';
 async function checkControlSizes(page, sidebarVisible) {
-  for (const selector of ['#refresh', '#logout2', ...(sidebarVisible ? ['#logout'] : [])]) {
+  for (const selector of ['#refresh', ...(sidebarVisible ? ['#logout'] : [])]) {
     const button = page.locator(selector);
     const box = await button.boundingBox();
     const icon = await button.locator('svg').boundingBox();
@@ -46,30 +46,36 @@ async function checkControlSizes(page, sidebarVisible) {
   await page.setViewportSize({width:1440,height:900});
   assert(await page.locator('#appSidebar').isVisible()); await checkControlSizes(page, true);
   await page.setViewportSize({width:390,height:844});
-  if (email === adminEmail) { await page.locator('#navToggle').click(); await page.locator('#logout').click(); }
-  else await page.locator('#logout2').click();
+  assert.equal(await page.locator('#logout2').count(), 0);
+  await page.locator('#navToggle').click(); await page.locator('#logout').click();
   assert(await page.locator('#auth').isVisible());
+  assert.equal(await page.evaluate(() => localStorage.getItem('rn_session')), null);
+  assert.equal(await page.evaluate(() => document.body.classList.contains('nav-open')), false);
   assert(errors.length===0,errors.join('\n')); console.log(email,labels.join(' | '));
   await page.close();
  }
  const page = await browser.newPage({viewport:{width:1440,height:900}}); await page.goto(base + '/');
  await page.locator('#email').fill(adminEmail); await page.locator('#password').fill(adminPassword); await page.locator('#loginForm button').click(); await page.locator('#app:not(.hidden)').waitFor();
- assert(!(await page.locator('#navToggle').isVisible())); assert(await page.locator('#appSidebar').isVisible()); assert(await page.locator('#logout2').isVisible());
+ assert(!(await page.locator('#navToggle').isVisible())); assert(await page.locator('#appSidebar').isVisible()); assert(await page.locator('#logout').isVisible()); assert.equal(await page.locator('#logout2').count(), 0);
  await page.setViewportSize({width:320,height:540});
  assert((await page.evaluate(() => document.documentElement.scrollWidth)) <= 320);
- assert(await page.locator('#refresh').isVisible() && await page.locator('#logout2').isVisible());
+ assert(await page.locator('#refresh').isVisible()); assert.equal(await page.locator('#logout2').count(), 0);
  await page.locator('#navToggle').click(); await page.locator('#nav button').last().click();
  assert.equal(await page.locator('#navToggle').getAttribute('aria-expanded'), 'false');
  await page.setViewportSize({width:600,height:844}); assert(await page.locator('#navToggle').isVisible());
  await page.locator('#navToggle').click(); await page.setViewportSize({width:1440,height:900});
  assert(await page.locator('#appSidebar').isVisible()); assert.equal(await page.locator('#appMain').evaluate(el=>el.inert),false);
  await page.setViewportSize({width:1440,height:900}); await checkControlSizes(page, true);
+ await page.locator('#logout').click(); assert(await page.locator('#auth').isVisible());
+ assert.equal(await page.evaluate(() => localStorage.getItem('rn_session')), null);
+ await page.locator('#email').fill(adminEmail); await page.locator('#password').fill(adminPassword);
+ await page.locator('#loginForm button').click(); await page.locator('#app:not(.hidden)').waitFor();
  // Seed a stale unversioned stylesheet as if an earlier installed app had cached it.
  // The current versioned app shell must still render correctly after going offline.
  await page.evaluate(async () => {
    const reg = await navigator.serviceWorker.ready;
    await new Promise(resolve => { if (reg.active) resolve(); else reg.addEventListener('updatefound', resolve, {once:true}); });
-   const cache = await caches.open('routenex-shell-v11');
+   const cache = await caches.open('routenex-shell-v12');
    await cache.put('/static/styles.css', new Response('svg { width: 250px; height: 250px; }', {headers:{'Content-Type':'text/css'}}));
  });
  await page.context().setOffline(true); await page.reload({waitUntil:'domcontentloaded'});

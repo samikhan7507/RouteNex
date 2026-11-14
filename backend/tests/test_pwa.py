@@ -36,6 +36,8 @@ def test_responsive_navigation_shell_is_accessible_and_cached():
     assert 'id="navToggle"' in html and 'aria-controls="appSidebar"' in html
     assert 'aria-expanded="false"' in html and 'aria-label="Close menu"' in html
     assert 'aria-label="Refresh current page"' in html and 'aria-label="Sign out"' in html
+    assert html.count('id="logout"') == 1 and 'id="logout2"' not in html
+    assert html.index('id="logout"') < html.index('</aside>')
     assert html.index('/static/app.js') < html.index('/static/navigation.js')
     assert client.get('/static/navigation.js').status_code == 200
     assert '/static/navigation.js' in client.get('/sw.js').text
