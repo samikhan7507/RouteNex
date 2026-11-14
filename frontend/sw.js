@@ -2,9 +2,9 @@
    - App shell: network-first (updates apply immediately), cache fallback when offline.
    - Leaflet + map tiles: cache-first (so a visited map still draws offline).
    - /api/*: NEVER cached (authenticated, live data). Offline -> clean JSON error. */
-const VERSION = 'v10';
+const VERSION = 'v11';
 const SHELL = `routenex-shell-${VERSION}`, MAPS = `routenex-maps-${VERSION}`;
-const PRECACHE = ['/', '/static/styles.css', '/static/app.js', '/static/navigation.js', '/static/pwa.js', '/static/phase2.js', '/static/phase3.js', '/static/phase4.js', '/static/phase5.js', '/static/phase6.js', '/manifest.webmanifest',
+const PRECACHE = ['/', '/static/styles.css?v=11', '/static/app.js?v=11', '/static/navigation.js?v=11', '/static/pwa.js?v=11', '/static/phase2.js?v=11', '/static/phase3.js?v=11', '/static/phase4.js?v=11', '/static/phase5.js?v=11', '/static/phase6.js?v=11', '/manifest.webmanifest',
   '/static/icons/icon-192.png', '/static/icons/icon-512.png'];
 const MAP_HOSTS = ['unpkg.com', 'tile.openstreetmap.org'];
 const MAX_MAP_ENTRIES = 250;
@@ -43,7 +43,9 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (url.origin === location.origin) {
-    e.respondWith(fetch(req).then(res => {
+    // Revalidate app files when online; versioned URLs prevent mixing releases.
+    const options = (req.mode === 'navigate' || url.pathname.startsWith('/static/')) ? {cache: 'no-cache'} : {};
+    e.respondWith(fetch(req, options).then(res => {
       if (res.ok && (req.mode === 'navigate' || url.pathname.startsWith('/static/'))) { const copy = res.clone(); caches.open(SHELL).then(c => c.put(req.mode === 'navigate' ? '/' : req, copy)); }
       return res;
     }).catch(async () => (await caches.match(req)) || (req.mode === 'navigate' ? caches.match('/') : Response.error())));
