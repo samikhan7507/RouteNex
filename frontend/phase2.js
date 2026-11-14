@@ -11,7 +11,6 @@ const stext = (s, kind) => ({ searching: 'Finding you a driver…', matched: 'Dr
 let trackId = +sessionStorage.getItem('rn_track') || null, timers = [], rating = 0, jobId = null, applied = null;
 const every = (fn, ms) => timers.push(setInterval(fn, ms)), stopAll = () => { timers.forEach(clearInterval); timers = []; };
 const H = {}, A = {};
-const byName = v => JAIPUR.find(x => x[0].toLowerCase() === String(v).trim().toLowerCase());
 
 menu.customer = [['overview', 'Home', '⌂'], ['rides', 'Ride', '⌖'], ['parcel', 'Parcel', '▣'], ['shop', 'Shop', '◇'], ['cart', 'Cart', '▤'], ['trips', 'My Trips', '↺'], ['wallet', 'Wallet', '₹']];
 menu.driver = [['overview', 'Driver Console', '◫'], ['trips', 'Earnings', '₹'], ['fleet', 'My Vehicle', '◆']];
@@ -25,8 +24,9 @@ function baseMap(id) {
 }
 const vIcon = ch => L.divIcon({ html: `<div class="veh">${ch}</div>`, className: 'veh-wrap', iconSize: [36, 36], iconAnchor: [18, 18] });
 async function osrm(a, b) {
-  try { const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson`); const d = await r.json(); const rt = d.routes && d.routes[0];
-    if (rt) return { km: rt.distance / 1000, min: Math.round(rt.duration / 60), pts: rt.geometry.coordinates.map(x => [x[1], x[0]]) }; } catch (e) {}
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 5000);
+  try { const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson`, { signal: controller.signal }); const d = await r.json(); const rt = d.routes && d.routes[0];
+    if (rt) return { km: rt.distance / 1000, min: Math.round(rt.duration / 60), pts: rt.geometry.coordinates.map(x => [x[1], x[0]]) }; } catch (e) {} finally { clearTimeout(timer); }
   return null;
 }
 function pointAt(pts, f) {
@@ -58,9 +58,10 @@ function liveMap(id) {  // pickup/drop pins, road route, and a vehicle that move
 async function booking(c, kind) {
   const parcel = kind === 'parcel', [w, cps] = await Promise.all([api('/wallet'), api('/coupons')]);
   const st = { pickup: null, drop: null, route: null, routeKey: '', cls: null, est: null }, marks = {}; let seq = 0, nearLayer = null, deb = null;
-  const places = JAIPUR.map(x => `<option value="${esc(x[0])}">`).join('');
   c.innerHTML = `<div class="ride-layout"><div class="card ride-search"><div class="sectionTitle"><h3>${parcel ? 'Send a parcel' : 'Book a ride'}</h3><span class="pill">Wallet ${money(w.balance)}</span></div>
-  <div id="bk-active"></div><label>Pickup</label><input id="bk-pickup" list="places" placeholder="Search a Jaipur landmark"><label>${parcel ? 'Deliver to' : 'Drop'}</label><input id="bk-drop" list="places" placeholder="Where to?"><datalist id="places">${places}</datalist>
+  <div id="bk-active"></div>
+  ${['pickup', 'drop'].map(k => `<label for="bk-${k}">${k === 'pickup' ? 'Pickup' : parcel ? 'Deliver to' : 'Drop'}</label><div class="place-field"><input id="bk-${k}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="bk-${k}-list" autocomplete="off" maxlength="120" placeholder="${k === 'pickup' ? 'Search pickup in India' : 'Search destination in India'}"><div id="bk-${k}-list" class="place-list hidden" role="listbox"></div></div><div id="bk-${k}-status" class="place-status" role="status" aria-live="polite"></div>`).join('')}
+  <p class="place-note">Search powered by Photon and <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>. Search text is sent to the search provider. Driver availability depends on pickup location.</p>
   <div class="map-mode"><button class="outline btn-sm" data-p2="mode" data-k="pickup">📍 Pickup on map</button><button class="outline btn-sm" data-p2="mode" data-k="drop">🏁 Drop on map</button></div>
   <button class="outline btn-sm" style="width:100%" data-p2="locate">◎ Use my current location as pickup</button>
   ${parcel ? `<div class="grid formGrid" style="margin-top:6px"><div><label>Weight (kg)</label><input id="pc-weight" type="number" min="0.1" max="900" step="0.1" value="2"></div><div><label>Size</label><select id="pc-size"><option value="small">Small (shoebox)</option><option value="medium">Medium (carton)</option><option value="large">Large (furniture)</option></select></div>
@@ -71,26 +72,30 @@ async function booking(c, kind) {
   <div><label>Coupon</label><input id="bk-coupon" placeholder="e.g. ${esc((cps.find(x => x.scope === 'all' || x.scope === (parcel ? 'parcel' : 'ride')) || { code: 'WELCOME50' }).code)}" style="text-transform:uppercase"></div></div>
   <div id="bk-msg" class="muted" style="min-height:20px;margin:6px 0"></div><button id="bk-book" style="width:100%" disabled data-p2="book">${parcel ? 'Book parcel pickup' : 'Book ride'}</button></div>
   <div class="card ride-map-card"><div class="sectionTitle"><h3>Route & nearby drivers</h3><span class="live"><i></i> Live</span></div><div id="bkMap" class="map real-map"></div></div></div>`;
-  const m = baseMap('bkMap');
-  if (!parcel) api('/rides').then(rs => { const a = rs.find(r => r.kind === 'ride' && ACTIVE.includes(r.status)); if (a) $('#bk-active').innerHTML = `<div class="notice">You already have an active ride (${esc(a.status)}). <button class="btn-sm" data-p2="track" data-id="${a.id}">Track or cancel it</button></div>`; }).catch(() => {});
+  const bookingRoot = c.querySelector('.ride-layout'), m = baseMap('bkMap');
+  if (!parcel) api('/rides').then(rs => { if (!bookingRoot.isConnected) return; const a = rs.find(r => r.kind === 'ride' && ACTIVE.includes(r.status)); if (a) $('#bk-active').innerHTML = `<div class="notice">You already have an active ride (${esc(a.status)}). <button class="btn-sm" data-p2="track" data-id="${a.id}">Track or cancel it</button></div>`; }).catch(() => {});
   const payload = () => { const a = st.pickup, b = st.drop, o = { pickup: a.name, pickup_lat: a.lat, pickup_lng: a.lng, dropoff: b.name, drop_lat: b.lat, drop_lng: b.lng,
     route_distance_km: st.route ? st.route.distance_km : undefined, route_duration_min: st.route ? st.route.duration_min : undefined, payment_method: $('#bk-pay').value, coupon: $('#bk-coupon').value.trim().toUpperCase() || undefined };
     if (parcel) { Object.assign(o, { weight_kg: +$('#pc-weight').value || 1, size: $('#pc-size').value, fragile: $('#pc-fragile').checked, description: $('#pc-desc').value, recipient_name: $('#pc-rname').value, recipient_phone: $('#pc-rphone').value }); if (st.cls) o.vehicle_class = st.cls; }
     else o.vehicle_class = st.cls || 'cab'; return o; };
+  const searches = {};
   function setPoint(k, p, name) {
+    if (searches[k]) searches[k].close();
+    clearPoint(k);
     st[k] = { lat: p[0], lng: p[1], name }; $('#bk-' + k).value = name;
     if (m) { if (marks[k]) m.removeLayer(marks[k]); marks[k] = L.marker(p, { draggable: true }).addTo(m); marks[k].on('dragend', e => { const z = e.target.getLatLng(); setPoint(k, [z.lat, z.lng], 'Pinned location'); }); }
+    if (m && (!st.pickup || !st.drop)) m.setView(p, 13);
     refresh();
   }
   let mode = 'pickup'; if (m) m.on('click', e => setPoint(mode, [e.latlng.lat, e.latlng.lng], `Map point ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`));
   async function nearby() {
-    if (!st.pickup || !m) return; try { const cls = st.cls || (parcel ? 'pbike' : 'cab'); const ds = await api(`/drivers/nearby?lat=${st.pickup.lat}&lng=${st.pickup.lng}&cls=${cls}`);
-      if (nearLayer) m.removeLayer(nearLayer); nearLayer = L.layerGroup(ds.map(d => L.marker([d.lat, d.lng], { icon: vIcon(ICON[cls]) }).bindPopup(`${d.eta_min} min away`))).addTo(m); } catch (e) {}
+    if (!st.pickup || !m) return; const point = st.pickup; try { const cls = st.cls || (parcel ? 'pbike' : 'cab'); const ds = await api(`/drivers/nearby?lat=${point.lat}&lng=${point.lng}&cls=${cls}`);
+      if (st.pickup !== point || !bookingRoot.isConnected) return; if (nearLayer) m.removeLayer(nearLayer); nearLayer = L.layerGroup(ds.map(d => L.marker([d.lat, d.lng], { icon: vIcon(ICON[cls]) }).bindPopup(`${d.eta_min} min away`))).addTo(m); } catch (e) {}
   }
   function paint(x) {
     $('#bk-wx').innerHTML = (x.weather && x.weather.rain ? '🌧 Rain in Jaipur right now, trips may take a little longer. ' : '') + (x.eta_source === 'ml' ? '<span class="pill">AI ETA</span>' : '');
     $('#bk-opts').innerHTML = x.options.map(o => `<div class="opt ${o.vehicle_class === st.cls ? 'sel' : ''}" data-p2="pick" data-c="${esc(o.vehicle_class)}"><div class="opt-ico">${ICON[o.vehicle_class]}</div>
-      <div class="opt-main"><b>${esc(o.label)}</b>${o.surge > 1 ? ` <span class="pill status-medium">${o.surge}x demand</span>` : ''}<br><small class="muted">${esc(o.note)} · ${o.eta_min} min trip · ${o.pickup_eta_min != null ? `${o.pickup_eta_min} min away` : 'no driver online'}</small>${o.factors && o.factors.length ? `<br><small class="eta-why">⏱ ${o.factors.map(esc).join(' · ')}</small>` : ''}</div>
+      <div class="opt-main"><b>${esc(o.label)}</b>${o.surge > 1 ? ` <span class="pill status-medium">${o.surge}x demand</span>` : ''}<br><small class="muted">${esc(o.note)} · ${o.eta_min} min trip · ${o.nearby > 0 && o.pickup_eta_min != null ? `${o.pickup_eta_min} min away` : 'no drivers nearby'}</small>${o.factors && o.factors.length ? `<br><small class="eta-why">⏱ ${o.factors.map(esc).join(' · ')}</small>` : ''}</div>
       <div class="opt-price"><b>${money(o.fare)}</b></div></div>`).join('');
     const sel = x.options.find(o => o.vehicle_class === st.cls) || x.options[0];
     $('#bk-msg').innerHTML = x.coupon_error ? `<span style="color:#c51f49">${esc(x.coupon_error)}</span>` : (x.discount ? `<span style="color:#087a5d">Coupon applied: you save ${money(x.discount)} · pay <b>${money(x.payable)}</b></span>` : `${x.distance_km} km · pay <b>${money(x.payable)}</b>`);
@@ -99,23 +104,70 @@ async function booking(c, kind) {
   async function refresh() {
     if (!st.pickup || !st.drop) return; const my = ++seq; $('#bk-book').disabled = true;
     const key = `${st.pickup.lat},${st.pickup.lng};${st.drop.lat},${st.drop.lng}`;
-    if (st.routeKey !== key) { const r = await osrm([st.pickup.lat, st.pickup.lng], [st.drop.lat, st.drop.lng]); if (my !== seq) return; st.routeKey = key;
+    if (st.routeKey !== key) { const r = await osrm([st.pickup.lat, st.pickup.lng], [st.drop.lat, st.drop.lng]); if (my !== seq || !bookingRoot.isConnected) return; st.routeKey = key;
       st.route = r ? { distance_km: +r.km.toFixed(2), duration_min: r.min, pts: r.pts } : null;
       if (m) { if (marks.route) m.removeLayer(marks.route); marks.route = L.polyline(st.route ? st.route.pts : [[st.pickup.lat, st.pickup.lng], [st.drop.lat, st.drop.lng]], { color: '#5548e7', weight: 6 }).addTo(m); m.fitBounds(marks.route.getBounds(), { padding: [40, 40] }); } }
-    try { const x = await api(parcel ? '/parcels/estimate' : '/rides/estimate', { method: 'POST', body: JSON.stringify(payload()) }); if (my !== seq) return;
+    try { const x = await api(parcel ? '/parcels/estimate' : '/rides/estimate', { method: 'POST', body: JSON.stringify(payload()) }); if (my !== seq || !bookingRoot.isConnected) return;
       st.est = x; if (!st.cls || !x.options.find(o => o.vehicle_class === st.cls)) st.cls = x.options[0].vehicle_class; paint(x); nearby(); }
-    catch (e) { $('#bk-opts').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    catch (e) { if (my === seq && bookingRoot.isConnected && $('#bk-opts')) $('#bk-opts').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
   const later = () => { clearTimeout(deb); deb = setTimeout(refresh, 450); };
   ['#bk-coupon', '#bk-pay', '#pc-weight', '#pc-size', '#pc-fragile'].forEach(q => { const n = $(q); if (n) { n.onchange = later; if (n.tagName === 'INPUT' && n.type !== 'checkbox') n.oninput = later; } });
-  ['pickup', 'drop'].forEach(k => $('#bk-' + k).onchange = () => { const z = byName($('#bk-' + k).value); if (z) setPoint(k, [z[1], z[2]], z[0]); else toast('Pick a suggested landmark or tap the map', true); });
+  function clearPoint(k) {
+    ++seq; st[k] = null; st.est = null; st.route = null; st.routeKey = '';
+    $('#bk-book').disabled = true; $('#bk-book').textContent = parcel ? 'Book parcel pickup' : 'Book ride';
+    $('#bk-opts').innerHTML = '<div class="empty">Choose pickup and drop to see prices.</div>';
+    $('#bk-msg').textContent = ''; $('#bk-wx').textContent = '';
+    if (m) { if (marks[k]) { m.removeLayer(marks[k]); delete marks[k]; } if (marks.route) { m.removeLayer(marks.route); delete marks.route; }
+      if (k === 'pickup' && nearLayer) { m.removeLayer(nearLayer); nearLayer = null; } }
+  }
+  function setupSearch(k) {
+    const input = $('#bk-' + k), list = $('#bk-' + k + '-list'), status = $('#bk-' + k + '-status');
+    let results = [], active = -1, timer, request, version = 0;
+    function hide() { list.classList.add('hidden'); input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); active = -1; }
+    function close() { ++version; clearTimeout(timer); if (request) request.abort(); request = null; results = []; hide(); status.textContent = ''; }
+    function choose(i) { const item = results[i]; if (!item) return; setPoint(k, [item.lat, item.lng], item.label); }
+    function render() {
+      list.innerHTML = results.map((r, i) => `<div id="bk-${k}-option-${i}" role="option" aria-selected="${i === active}" class="place-option${i === active ? ' active' : ''}" data-index="${i}"><strong>${esc(r.name)}</strong><small>${esc(r.label)}</small></div>`).join('');
+      list.classList.toggle('hidden', !results.length); input.setAttribute('aria-expanded', String(!!results.length));
+      if (active >= 0) { input.setAttribute('aria-activedescendant', `bk-${k}-option-${active}`); list.children[active].scrollIntoView({block:'nearest'}); }
+      else input.removeAttribute('aria-activedescendant');
+    }
+    input.addEventListener('input', () => {
+      close(); clearPoint(k); const q = input.value.trim();
+      if (q.length < 3) { status.textContent = q ? 'Type at least 3 characters to search.' : ''; return; }
+      status.textContent = 'Searching locations…'; const current = version;
+      timer = setTimeout(async () => {
+        request = new AbortController();
+        try {
+          const data = await api('/places/search?q=' + encodeURIComponent(q), { signal: request.signal });
+          if (current !== version || !input.isConnected || document.activeElement !== input) return;
+          results = Array.isArray(data.results) ? data.results.filter(r => typeof r.label === 'string' && typeof r.name === 'string' && Number.isFinite(r.lat) && Number.isFinite(r.lng)).slice(0, 8) : [];
+          render(); status.textContent = data.source === 'limited' ? 'Online search unavailable or busy; showing limited landmarks. You can also use the map.' : results.length ? `${results.length} suggestions available. Use arrow keys to choose.` : 'No matches. Try a different search or use the map.';
+        } catch (e) {
+          if (current !== version || !input.isConnected || e.name === 'AbortError') return;
+          results = JAIPUR.filter(x => x[0].toLowerCase().includes(q.toLowerCase())).map(x => ({name:x[0],label:x[0],lat:x[1],lng:x[2]})); render();
+          status.textContent = 'Search unavailable. Limited Jaipur landmarks or map selection may still work.';
+        }
+      }, 500);
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { close(); return; }
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && results.length) { e.preventDefault(); active = e.key === 'ArrowDown' ? Math.min(active + 1, results.length - 1) : (active < 0 ? results.length - 1 : Math.max(0, active - 1)); render(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (active >= 0) choose(active); }
+    });
+    list.addEventListener('pointerdown', e => { const option = e.target.closest('[data-index]'); if (option) { e.preventDefault(); choose(+option.dataset.index); } });
+    input.addEventListener('blur', () => { setTimeout(() => { if (document.activeElement !== input) close(); }, 150); });
+    searches[k] = { close };
+  }
+  ['pickup', 'drop'].forEach(setupSearch);
   A.mode = b => { mode = b.dataset.k; toast(mode === 'pickup' ? 'Tap the map to set pickup' : 'Tap the map to set drop'); };
   A.locate = () => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => { setPoint('pickup', [p.coords.latitude, p.coords.longitude], 'My location'); m && m.setView([p.coords.latitude, p.coords.longitude], 14); }, () => toast('Location permission denied', true), { enableHighAccuracy: true, timeout: 10000 }) : toast('Location not supported', true);
   A.pick = b => { st.cls = b.dataset.c; if (st.est) paint(st.est); refresh(); };
   A.book = async () => { const btn = $('#bk-book'); btn.disabled = true; btn.textContent = 'Booking…';
     try { const x = await api(parcel ? '/parcels' : '/rides', { method: 'POST', body: JSON.stringify(payload()) }); trackId = x.id; sessionStorage.setItem('rn_track', x.id); toast(x.status === 'matched' ? `Driver ${x.driver.name} is on the way` : 'Looking for a driver…'); navigate('track'); }
     catch (e) { toast(e.message, true); btn.disabled = false; refresh(); } };
-  setPoint('pickup', [JAIPUR[0][1], JAIPUR[0][2]], JAIPUR[0][0]); setPoint('drop', [JAIPUR[1][1], JAIPUR[1][2]], JAIPUR[1][0]);
+
 }
 H['customer:rides'] = c => booking(c, 'ride');
 H['customer:parcel'] = c => booking(c, 'parcel');

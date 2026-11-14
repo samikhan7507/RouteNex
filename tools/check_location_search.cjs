@@ -1,0 +1,60 @@
+const { chromium } = require('playwright-core');
+const assert = require('assert');
+const path = require('path');
+const fs = require('fs');
+const base = process.env.ROUTENEX_BASE_URL || 'http://127.0.0.1:8000';
+(async () => {
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args:['--no-sandbox', '--disable-dev-shm-usage'], headless:true });
+  const page = await browser.newPage({ viewport:{width:1440,height:900} });
+  const errors = []; const estimates = []; page.on('pageerror', e => errors.push(e.message));
+  const leaflet = path.join(path.dirname(require.resolve('leaflet/package.json')), 'dist');
+  await page.route('https://unpkg.com/leaflet@1.9.4/dist/**', r => {
+    const name = new URL(r.request().url()).pathname.split('/').pop();
+    const file = path.join(leaflet, name);
+    return fs.existsSync(file) ? r.fulfill({path:file}) : r.abort();
+  });
+  await page.route('https://*.tile.openstreetmap.org/**', r => r.abort());
+  await page.route('https://router.project-osrm.org/**', r => r.fulfill({json:{code:'NoRoute'}}));
+  await page.route('**/api/rides/estimate', async route => { estimates.push(route.request().postDataJSON()); await route.continue(); });
+  await page.route('**/api/places/search?q=slow*', async route => {
+    await new Promise(r=>setTimeout(r, 1600));
+    try { await route.fulfill({json:{source:'photon',results:[{name:'Old result',label:'Old result',lat:20,lng:70}]}}); } catch (_) {}
+  });
+  await page.goto(base); await page.locator('#loginForm button').click();
+  await page.locator('#app:not(.hidden)').waitFor();
+  await page.locator('#nav button').filter({hasText:'Ride'}).click();
+  const pickup = page.locator('#bk-pickup'), drop = page.locator('#bk-drop');
+  await pickup.waitFor(); assert.equal(await pickup.inputValue(), ''); assert(await page.locator('#bk-book').isDisabled());
+  await pickup.fill('Udaipur');
+  await page.locator('#bk-pickup-list [role=option]').first().waitFor();
+  assert((await page.locator('#bk-pickup-status').textContent()).includes('limited'));
+  await pickup.press('ArrowDown'); assert(await pickup.getAttribute('aria-activedescendant')); await pickup.press('Enter');
+  assert.equal(await pickup.inputValue(), 'Udaipur, Rajasthan');
+  await drop.fill('Taj'); await page.locator('#bk-drop-list [role=option]').first().click();
+  assert((await drop.inputValue()).includes('Taj Mahal'));
+  await page.locator('#bk-book:not([disabled])').waitFor();
+  assert(Math.abs(estimates.at(-1).pickup_lat - 24.5854) < 0.0001);
+  assert(Math.abs(estimates.at(-1).drop_lat - 27.1751) < 0.0001);
+  await pickup.fill('Jodh'); assert(await page.locator('#bk-book').isDisabled());
+  await page.locator('#bk-pickup-list [role=option]').first().waitFor();
+  await pickup.press('Escape'); assert.equal(await pickup.getAttribute('aria-expanded'), 'false');
+  await pickup.fill('slow'); await page.waitForTimeout(700); await pickup.fill('Jodhpur');
+  await page.locator('#bk-pickup-list [role=option]').first().waitFor();
+  await page.waitForTimeout(1100); assert(!(await page.locator('#bk-pickup-list').textContent()).includes('Old result'));
+  await page.locator('#bk-pickup-list [role=option]').first().click();
+  await page.locator('#bk-book:not([disabled])').waitFor();
+  assert.equal(estimates.at(-1).pickup, 'Jodhpur, Rajasthan');
+  // Explicit map selection changes the chosen pickup and its coordinates.
+  await page.locator('[data-p2=mode][data-k=pickup]').click();
+  await page.locator('#bkMap').click({ position:{x:200,y:200} });
+  assert((await pickup.inputValue()).startsWith('Map point '));
+  await page.locator('#bk-book:not([disabled])').waitFor();
+  assert(estimates.at(-1).pickup.startsWith('Map point '));
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('#navToggle').click(); await page.locator('#nav button').filter({hasText:'Parcel'}).click();
+  await page.locator('#bk-pickup').fill('Ajmer');
+  await page.locator('#bk-pickup-list [role=option]').first().click();
+  assert((await page.locator('#bk-pickup').inputValue()).includes('Ajmer'));
+  assert((await page.evaluate(() => document.documentElement.scrollWidth)) <= 390);
+  assert.deepEqual(errors, []); await browser.close(); console.log('Location search, stale input, map selection, and parcel mobile: OK');
+})().catch(e=>{console.error(e);process.exit(1)});

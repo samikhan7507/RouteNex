@@ -231,3 +231,8 @@ The shop includes 10 locally hosted AI-generated illustrative product images for
 [![Portfolio](https://img.shields.io/badge/Portfolio-samikhan7507.github.io-5548e7)](https://samikhan7507.github.io/Sami-portfolio/)
 
 If you like the project, a ⭐ on the repository is much appreciated.
+
+
+### Ride and parcel location search
+
+Pickup and drop autocomplete searches places across India using Photon and OpenStreetMap, with a Jaipur bias. Suggestions are not a promise of service coverage: matching depends on available drivers near the pickup. Search text is sent from the backend to the Photon provider; do not type private information that is not needed to find a location. The public `https://photon.komoot.io/api` service is best-effort, may throttle requests, and has no availability guarantee. The app debounces, caches, and limits requests per process. For production traffic, configure `PHOTON_URL` to an appropriately provisioned Photon-compatible `/api` endpoint with terms and privacy protections suitable for your use, and use shared rate limiting across workers. When unavailable, only a small built-in Rajasthan/India landmark list is offered; map pin selection and current location remain alternatives. `ROUTENEX_OFFLINE=1` disables external search. Provider data © OpenStreetMap contributors.
